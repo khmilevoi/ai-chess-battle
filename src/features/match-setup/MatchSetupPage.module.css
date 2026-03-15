@@ -1,0 +1,136 @@
+.page {
+  display: grid;
+  gap: 28px;
+}
+
+.header {
+  display: grid;
+  gap: 10px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 6vw, 5rem);
+  line-height: 0.98;
+}
+
+.subtitle {
+  max-width: 60ch;
+  font-size: 1rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.panel {
+  display: grid;
+  gap: 18px;
+  min-height: 100%;
+  padding: 24px;
+  border: 1px solid #050505;
+}
+
+.lightPanel {
+  background: #ffffff;
+  color: #050505;
+}
+
+.darkPanel {
+  background: #050505;
+  color: #ffffff;
+}
+
+.darkPanel button,
+.darkPanel input,
+.darkPanel select {
+  background: #050505;
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+.sideTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2rem;
+}
+
+.summary {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.fieldGroup {
+  display: grid;
+  gap: 16px;
+}
+
+.fieldGroup label,
+.customFields label {
+  display: grid;
+  gap: 8px;
+}
+
+.fieldGroup span,
+.customFields span {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fieldGroup select,
+.customFields input,
+.customFields select {
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid currentColor;
+}
+
+.customFields {
+  display: grid;
+  gap: 14px;
+}
+
+.errorList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.92rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.primaryAction {
+  min-width: 220px;
+  min-height: 52px;
+  padding: 0 18px;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.inlineError {
+  padding: 14px 16px;
+  border: 1px solid #050505;
+  background: #ffffff;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

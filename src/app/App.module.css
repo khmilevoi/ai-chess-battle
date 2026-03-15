@@ -1,0 +1,39 @@
+.shell {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.masthead {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+  margin-bottom: 24px;
+}
+
+.brand {
+  display: grid;
+  gap: 4px;
+}
+
+.name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+}
+
+.tagline {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.content {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid #050505;
+  background: #ffffff;
+}

@@ -1,0 +1,93 @@
+.boardWrap {
+  display: grid;
+  gap: 12px;
+}
+
+.frame {
+  border: 1px solid #050505;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  border: 1px solid #050505;
+}
+
+.square {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-right: 1px solid #050505;
+  border-bottom: 1px solid #050505;
+  cursor: pointer;
+}
+
+.light {
+  background: #ffffff;
+}
+
+.dark {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      #050505 0,
+      #050505 8px,
+      #ffffff 8px,
+      #ffffff 16px
+    );
+}
+
+.dark svg text {
+  fill: #ffffff;
+  stroke: #050505;
+}
+
+.piece {
+  width: 82%;
+  height: 82%;
+}
+
+.coordinate {
+  position: absolute;
+  left: 6px;
+  bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.selected {
+  box-shadow: inset 0 0 0 4px #050505;
+}
+
+.movable::after,
+.target::after,
+.lastMove::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.movable::after {
+  box-shadow: inset 0 0 0 2px #050505;
+}
+
+.target::after {
+  inset: 36%;
+  border-radius: 999px;
+  background: #050505;
+}
+
+.lastMove::before {
+  border: 3px solid #050505;
+}
+
+.disabled {
+  cursor: default;
+}
