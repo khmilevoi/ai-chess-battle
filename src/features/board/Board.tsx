@@ -1,6 +1,7 @@
 import styles from './Board.module.css'
 import type { BoardSnapshot, Square } from '../../domain/chess/types'
 import { PieceIcon } from '../../shared/ui/PieceIcon'
+import { reatomMemo } from '../../shared/ui/reatomMemo'
 
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 const ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
@@ -11,7 +12,7 @@ function squareColor(square: Square) {
   return (fileIndex + rankIndex) % 2 === 0 ? styles.light : styles.dark
 }
 
-export function Board({
+export const Board = reatomMemo(({
   snapshot,
   selectedSquare,
   legalTargets,
@@ -25,7 +26,7 @@ export function Board({
   movableSquares: Array<Square>
   interactive: boolean
   onSquareClick: (square: Square) => void
-}) {
+}) => {
   const pieces = new Map(snapshot.pieces.map((piece) => [piece.square, piece]))
   const lastMoveSquares = new Set(
     snapshot.lastMove ? [snapshot.lastMove.from, snapshot.lastMove.to] : [],
@@ -75,4 +76,4 @@ export function Board({
       </div>
     </div>
   )
-}
+}, 'Board')

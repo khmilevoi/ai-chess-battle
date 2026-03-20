@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react'
 import {
   type ActorKey,
   type MatchSideConfig,
   getRegisteredActor,
 } from '../../actors/registry'
 import type { Side } from '../../domain/chess/types'
+import { reatomMemo } from '../../shared/ui/reatomMemo'
 
 export type ActorSettingsFieldsProps<K extends ActorKey = ActorKey> = {
   side: Side
@@ -13,7 +13,7 @@ export type ActorSettingsFieldsProps<K extends ActorKey = ActorKey> = {
   errors: Record<string, Array<string>>
 }
 
-function assertNever(value: never): ReactNode {
+function assertNever(value: never): never {
   throw new Error(`Unhandled actor settings variant: ${String(value)}`)
 }
 
@@ -24,12 +24,12 @@ type BranchActorSettingsProps<K extends ActorKey> = {
   errors: Record<string, Array<string>>
 }
 
-function HumanActorSettingsFields({
+const HumanActorSettingsFields = reatomMemo(({
   side,
   sideConfig,
   onChange,
   errors,
-}: BranchActorSettingsProps<'human'>) {
+}: BranchActorSettingsProps<'human'>) => {
   const descriptor = getRegisteredActor('human')
   const SettingsComponent = descriptor.SettingsComponent
 
@@ -46,14 +46,14 @@ function HumanActorSettingsFields({
       errors={errors}
     />
   )
-}
+}, 'HumanActorSettingsFields')
 
-function OpenAiActorSettingsFields({
+const OpenAiActorSettingsFields = reatomMemo(({
   side,
   sideConfig,
   onChange,
   errors,
-}: BranchActorSettingsProps<'openai'>) {
+}: BranchActorSettingsProps<'openai'>) => {
   const descriptor = getRegisteredActor('openai')
   const SettingsComponent = descriptor.SettingsComponent
 
@@ -70,14 +70,14 @@ function OpenAiActorSettingsFields({
       errors={errors}
     />
   )
-}
+}, 'OpenAiActorSettingsFields')
 
-export function ActorSettingsFields({
+export const ActorSettingsFields = reatomMemo(({
   side,
   sideConfig,
   onChange,
   errors,
-}: ActorSettingsFieldsProps) {
+}: ActorSettingsFieldsProps) => {
   switch (sideConfig.actorKey) {
     case 'human':
       return (
@@ -102,4 +102,4 @@ export function ActorSettingsFields({
     default:
       return assertNever(sideConfig)
   }
-}
+}, 'ActorSettingsFields')

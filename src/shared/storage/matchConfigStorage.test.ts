@@ -1,15 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { StorageError } from '../errors'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultMatchConfig } from '../../actors/registry'
-import {
-  loadStoredMatchConfig,
-  saveStoredMatchConfig,
-} from './matchConfigStorage'
+import { loadStoredMatchConfig, storedMatchConfig } from './matchConfigStorage'
 
 const STORAGE_KEY = 'ai-chess-battle.match-config'
 
 describe('matchConfigStorage', () => {
   beforeEach(() => {
+    storedMatchConfig.set(null)
     window.localStorage.clear()
   })
 
@@ -17,15 +14,24 @@ describe('matchConfigStorage', () => {
     expect(loadStoredMatchConfig()).toBeNull()
   })
 
-  it('returns a storage error for malformed json', () => {
-    window.localStorage.setItem(STORAGE_KEY, '{broken')
+  it('round-trips valid config through storage', () => {
+    const config = createDefaultMatchConfig()
 
-    const result = loadStoredMatchConfig()
+    storedMatchConfig.set(config)
 
-    expect(result).toBeInstanceOf(StorageError)
+    expect(loadStoredMatchConfig()).toEqual(config)
   })
 
-  it('returns a storage error for invalid actor config', () => {
+  it('treats malformed raw json as empty state', async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{broken')
+
+    vi.resetModules()
+    const { loadStoredMatchConfig } = await import('./matchConfigStorage')
+
+    expect(loadStoredMatchConfig()).toBeNull()
+  })
+
+  it('treats malformed raw match configs as empty state', async () => {
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -34,16 +40,9 @@ describe('matchConfigStorage', () => {
       }),
     )
 
-    const result = loadStoredMatchConfig()
+    vi.resetModules()
+    const { loadStoredMatchConfig } = await import('./matchConfigStorage')
 
-    expect(result).toBeInstanceOf(StorageError)
-  })
-
-  it('round-trips valid config through localStorage', () => {
-    const config = createDefaultMatchConfig()
-    const saveResult = saveStoredMatchConfig(config)
-
-    expect(saveResult).toBeNull()
-    expect(loadStoredMatchConfig()).toEqual(config)
+    expect(loadStoredMatchConfig()).toBeNull()
   })
 })

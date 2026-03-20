@@ -4,6 +4,7 @@ import {
   action,
   atom,
   computed,
+  effect,
   reatomEnum,
   withAbort,
   withAsync,
@@ -23,22 +24,34 @@ import {
   type ActorMove,
   type BoardSnapshot,
   type ChessEngineFacade,
-  type Side,
   type Square,
 } from '../../domain/chess/types'
+import { clearStoredGameSession, replayGameSession, saveStoredGameSession, type StoredGameSession } from '../../shared/storage/gameSessionStorage'
 import { TurnCancelledError } from '../../shared/errors'
 
 type SideActors = Record<
-  Side,
+  BoardSnapshot['turn'],
   {
-    actorKey: MatchConfig[Side]['actorKey']
+    actorKey: MatchConfig[BoardSnapshot['turn']]['actorKey']
     actor: ActorModel
   }
 >
 
+type GameStatusTone = 'neutral' | 'warning' | 'error' | 'success'
+
+export type GameStatusView = {
+  title: string
+  detail: string
+  tone: GameStatusTone
+  busy: boolean
+  actorLabel: string | null
+  canRetry: boolean
+}
+
 type CreateGameModelOptions = {
   name: string
   config: MatchConfig
+  initialSession: StoredGameSession | null
   leaveToSetup: () => void
 }
 
@@ -134,9 +147,14 @@ function createSideActors(config: MatchConfig): SideActors | Error {
   }
 }
 
+function getTurnKey(snapshot: BoardSnapshot): string {
+  return `${snapshot.history.length}:${snapshot.fen}`
+}
+
 export function createGameModel({
   name,
   config,
+  initialSession,
   leaveToSetup,
 }: CreateGameModelOptions) {
   const engine = atom<ChessEngineFacade | null>(null, `${name}.engine`)
@@ -144,10 +162,44 @@ export function createGameModel({
   const actors = atom<SideActors | null>(null, `${name}.actors`)
   const selectedSquare = atom<Square | null>(null, `${name}.selectedSquare`)
   const runtimeError = atom<Error | null>(null, `${name}.runtimeError`)
+  const requestedTurnKey = atom<string | null>(null, `${name}.requestedTurnKey`)
+  const turnActivity = reatomEnum(['idle', 'awaitingActor', 'applyingMove'], {
+    name: `${name}.turnActivity`,
+    initState: 'idle',
+  })
   const phase = reatomEnum(['pending', 'playing', 'actorError', 'gameOver'], {
     name: `${name}.phase`,
     initState: 'pending',
   })
+
+  const persistSnapshot = action((nextSnapshot: BoardSnapshot) => {
+    saveStoredGameSession({
+      version: 1,
+      config,
+      moves: nextSnapshot.history,
+      updatedAt: Date.now(),
+    })
+    return null
+  }, `${name}.persistSnapshot`)
+
+  const resetState = action(() => {
+    const currentSnapshot = snapshot()
+
+    playTurn.abort(
+      new TurnCancelledError({
+        side: currentSnapshot?.turn ?? 'white',
+      }),
+    )
+    engine.set(null)
+    actors.set(null)
+    snapshot.set(null)
+    selectedSquare.set(null)
+    runtimeError.set(null)
+    requestedTurnKey.set(null)
+    turnActivity.setIdle()
+    phase.setPending()
+    return null
+  }, `${name}.resetState`)
 
   const movableSquares = computed(() => {
     const currentEngine = engine()
@@ -180,6 +232,15 @@ export function createGameModel({
     const actor = currentActors[currentSnapshot.turn]?.actor
     return actor.kind === 'interactive' ? actor : null
   }, `${name}.activeHumanActor`)
+  const activeActorLabel = computed(() => {
+    const currentSnapshot = snapshot()
+
+    if (!currentSnapshot) {
+      return null
+    }
+
+    return getRegisteredActor(config[currentSnapshot.turn].actorKey).displayName
+  }, `${name}.activeActorLabel`)
   const statusText = computed(() => {
     const currentSnapshot = snapshot()
 
@@ -201,103 +262,220 @@ export function createGameModel({
   const boardInteractive = computed(() => {
     return phase() === 'playing' && activeHumanActor() !== null
   }, `${name}.boardInteractive`)
-
-  const dispose = action(() => {
+  const statusView = computed(() => {
     const currentSnapshot = snapshot()
+    const currentError = runtimeError()
+    const currentActorLabel = activeActorLabel()
+    const playTurnStatus = playTurn.status()
+    const currentHumanActor = activeHumanActor()
 
-    playTurn.abort(
-      new TurnCancelledError({
-        side: currentSnapshot?.turn ?? 'white',
-      }),
-    )
-    engine.set(null)
-    actors.set(null)
-    snapshot.set(null)
-    selectedSquare.set(null)
-    runtimeError.set(null)
-    phase.setPending()
-    return null
-  }, `${name}.dispose`)
+    if (!currentSnapshot) {
+      return {
+        title: 'Preparing match',
+        detail: 'Rebuilding board state and actor runtime.',
+        tone: 'neutral',
+        busy: true,
+        actorLabel: null,
+        canRetry: false,
+      } satisfies GameStatusView
+    }
+
+    if (phase() === 'actorError') {
+      return {
+        title: 'Turn failed',
+        detail: currentError?.message ?? 'The current turn failed.',
+        tone: 'error',
+        busy: false,
+        actorLabel: currentActorLabel,
+        canRetry: true,
+      } satisfies GameStatusView
+    }
+
+    if (phase() === 'gameOver') {
+      return {
+        title: 'Game over',
+        detail: formatStatus(currentSnapshot),
+        tone: 'success',
+        busy: false,
+        actorLabel: currentActorLabel,
+        canRetry: false,
+      } satisfies GameStatusView
+    }
+
+    if (playTurnStatus.isPending) {
+      if (turnActivity() === 'applyingMove') {
+        return {
+          title: 'Applying move',
+          detail: `${currentActorLabel ?? 'Current actor'} submitted a move.`,
+          tone: 'warning',
+          busy: true,
+          actorLabel: currentActorLabel,
+          canRetry: false,
+        } satisfies GameStatusView
+      }
+
+      if (currentHumanActor) {
+        return {
+          title: 'Waiting for move',
+          detail: `${currentActorLabel ?? 'Human actor'} is waiting for board input.`,
+          tone: 'warning',
+          busy: true,
+          actorLabel: currentActorLabel,
+          canRetry: false,
+        } satisfies GameStatusView
+      }
+
+      return {
+        title: 'Waiting for actor',
+        detail: `${currentActorLabel ?? 'Actor'} is choosing a move.`,
+        tone: 'warning',
+        busy: true,
+        actorLabel: currentActorLabel,
+        canRetry: false,
+      } satisfies GameStatusView
+    }
+
+    if (currentHumanActor) {
+      return {
+        title: 'Your turn',
+        detail: 'Select a piece and then choose a legal target square.',
+        tone: 'neutral',
+        busy: false,
+        actorLabel: currentActorLabel,
+        canRetry: false,
+      } satisfies GameStatusView
+    }
+
+    return {
+      title: 'Turn ready',
+      detail: `${currentActorLabel ?? 'Actor'} will move next.`,
+      tone: 'neutral',
+      busy: false,
+      actorLabel: currentActorLabel,
+      canRetry: false,
+    } satisfies GameStatusView
+  }, `${name}.statusView`)
 
   const playTurn = action(async () => {
-    while (true) {
-      const currentEngine = engine()
-      const currentActors = actors()
-      const currentSnapshot = snapshot()
+    const currentEngine = engine()
+    const currentActors = actors()
+    const currentSnapshot = snapshot()
 
-      if (!currentEngine || !currentActors || !currentSnapshot) {
-        return null
-      }
-
-      if (isTerminalStatus(currentSnapshot.status)) {
-        phase.setGameOver()
-        return currentSnapshot
-      }
-
-      phase.setPlaying()
-      runtimeError.set(null)
-
-      const controller = abortVar.first()
-
-      if (!controller) {
-        return new TurnCancelledError({
-          side: currentSnapshot.turn,
-        })
-      }
-
-      const actorContext = buildActorContext(currentEngine, currentSnapshot)
-      const result = await wrap(
-        currentActors[currentSnapshot.turn].actor.requestMove({
-          context: actorContext,
-          signal: controller.signal,
-        }),
-      )
-
-      if (errore.isAbortError(result)) {
-        return result
-      }
-
-      if (result instanceof Error) {
-        runtimeError.set(result)
-        phase.setActorError()
-        return result
-      }
-
-      const nextSnapshot = currentEngine.applyMove(result)
-
-      if (nextSnapshot instanceof Error) {
-        runtimeError.set(nextSnapshot)
-        phase.setActorError()
-        return nextSnapshot
-      }
-
-      snapshot.set(nextSnapshot)
-      selectedSquare.set(null)
-      runtimeError.set(null)
-
-      if (isTerminalStatus(nextSnapshot.status)) {
-        phase.setGameOver()
-        return nextSnapshot
-      }
+    if (!currentEngine || !currentActors || !currentSnapshot) {
+      return null
     }
+
+    if (phase() !== 'playing') {
+      return null
+    }
+
+    if (isTerminalStatus(currentSnapshot.status)) {
+      phase.setGameOver()
+      return currentSnapshot
+    }
+
+    runtimeError.set(null)
+    turnActivity.setAwaitingActor()
+
+    const controller = abortVar.first()
+
+    if (!controller) {
+      turnActivity.setIdle()
+      return new TurnCancelledError({
+        side: currentSnapshot.turn,
+      })
+    }
+
+    const actorContext = buildActorContext(currentEngine, currentSnapshot)
+    const result = await wrap(
+      currentActors[currentSnapshot.turn].actor.requestMove({
+        context: actorContext,
+        signal: controller.signal,
+      }),
+    )
+
+    if (errore.isAbortError(result)) {
+      turnActivity.setIdle()
+      return result
+    }
+
+    if (result instanceof Error) {
+      runtimeError.set(result)
+      turnActivity.setIdle()
+      phase.setActorError()
+      return result
+    }
+
+    turnActivity.setApplyingMove()
+
+    const nextSnapshot = currentEngine.applyMove(result)
+
+    if (nextSnapshot instanceof Error) {
+      runtimeError.set(nextSnapshot)
+      turnActivity.setIdle()
+      phase.setActorError()
+      return nextSnapshot
+    }
+
+    snapshot.set(nextSnapshot)
+    selectedSquare.set(null)
+    runtimeError.set(null)
+    turnActivity.setIdle()
+    persistSnapshot(nextSnapshot)
+
+    if (isTerminalStatus(nextSnapshot.status)) {
+      phase.setGameOver()
+      return nextSnapshot
+    }
+
+    phase.setPlaying()
+    return nextSnapshot
   }, `${name}.playTurn`).extend(
     withAsync({
-      cacheParams: true,
       status: true,
     }),
     withAbort(),
   )
 
-  const startMatch = action(async () => {
-    dispose()
+  const turnLoop = effect(() => {
+    const currentSnapshot = snapshot()
+    const currentActors = actors()
+    const currentPhase = phase()
+    const currentTurnActivity = turnActivity()
 
-    const nextEngine = createChessEngine()
-
-    if (nextEngine instanceof Error) {
-      runtimeError.set(nextEngine)
-      phase.setActorError()
-      return nextEngine
+    if (currentSnapshot === null || currentActors === null) {
+      return
     }
+
+    if (currentPhase !== 'playing') {
+      return
+    }
+
+    if (isTerminalStatus(currentSnapshot.status)) {
+      phase.setGameOver()
+      return
+    }
+
+    if (currentTurnActivity !== 'idle') {
+      return
+    }
+
+    const currentTurnKey = getTurnKey(currentSnapshot)
+
+    if (requestedTurnKey() === currentTurnKey) {
+      return
+    }
+
+    requestedTurnKey.set(currentTurnKey)
+    queueMicrotask(
+      wrap(() => {
+        void playTurn()
+      }),
+    )
+  }, `${name}.turnLoop`)
+
+  const startMatch = action(async () => {
+    resetState()
 
     const nextActors = createSideActors(config)
 
@@ -307,23 +485,62 @@ export function createGameModel({
       return nextActors
     }
 
-    engine.set(nextEngine)
-    actors.set(nextActors)
+    const restoredState = (() => {
+      if (initialSession === null) {
+        const nextEngine = createChessEngine()
 
-    const nextSnapshot = nextEngine.getBoardSnapshot()
-    snapshot.set(nextSnapshot)
+        if (nextEngine instanceof Error) {
+          return nextEngine
+        }
+
+        return {
+          engine: nextEngine,
+          snapshot: nextEngine.getBoardSnapshot(),
+        }
+      }
+
+      return replayGameSession(initialSession)
+    })()
+
+    if (restoredState instanceof Error) {
+      runtimeError.set(restoredState)
+      phase.setActorError()
+      return restoredState
+    }
+
+    engine.set(restoredState.engine)
+    actors.set(nextActors)
+    snapshot.set(restoredState.snapshot)
     selectedSquare.set(null)
     runtimeError.set(null)
-    phase.setPlaying()
+    requestedTurnKey.set(null)
+    turnActivity.setIdle()
+    persistSnapshot(restoredState.snapshot)
 
+    if (isTerminalStatus(restoredState.snapshot.status)) {
+      phase.setGameOver()
+      return null
+    }
+
+    requestedTurnKey.set(getTurnKey(restoredState.snapshot))
+    phase.setPlaying()
     void playTurn()
     return null
   }, `${name}.startMatch`)
 
-  const retryTurn = action(async () => {
+  const retryTurn = action(() => {
+    const currentSnapshot = snapshot()
+
+    if (!currentSnapshot) {
+      return null
+    }
+
     runtimeError.set(null)
+    turnActivity.setIdle()
+    requestedTurnKey.set(getTurnKey(currentSnapshot))
     phase.setPlaying()
-    return await wrap(playTurn.retry())
+    void playTurn()
+    return null
   }, `${name}.retryTurn`)
 
   const clickSquare = action((square: Square) => {
@@ -373,10 +590,17 @@ export function createGameModel({
   }, `${name}.clickSquare`)
 
   const leaveMatch = action(() => {
-    dispose()
+    resetState()
+    clearStoredGameSession()
     leaveToSetup()
     return null
   }, `${name}.leaveMatch`)
+
+  const dispose = action(() => {
+    turnLoop.unsubscribe()
+    resetState()
+    return null
+  }, `${name}.dispose`)
 
   return {
     config,
@@ -389,6 +613,7 @@ export function createGameModel({
     movableSquares,
     activeHumanActor,
     statusText,
+    statusView,
     historyText,
     boardInteractive,
     startMatch,

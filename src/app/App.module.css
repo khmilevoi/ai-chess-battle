@@ -37,3 +37,12 @@
   border: 1px solid #050505;
   background: #ffffff;
 }
+
+.routePlaceholder {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}

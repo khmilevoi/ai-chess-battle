@@ -8,7 +8,11 @@ import {
 } from '../../shared/errors'
 import { createChessEngine } from '../chess/createChessEngine'
 import type { ActorContext } from '../chess/types'
-import { DEFAULT_OPENAI_MODEL, OpenAiActor } from '../../actors/openai'
+import {
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_REASONING_EFFORT,
+  OpenAiActor,
+} from '../../actors/openai'
 
 function createActorContext(): ActorContext {
   const engine = createChessEngine()
@@ -51,6 +55,7 @@ describe('OpenAiActor', () => {
   const config = {
     apiKey: 'test-key',
     model: DEFAULT_OPENAI_MODEL,
+    reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
   }
 
   beforeEach(() => {
@@ -171,8 +176,14 @@ describe('OpenAiActor', () => {
 
     expect(result).not.toBeInstanceOf(Error)
     expect(createMock).toHaveBeenCalledTimes(1)
-    expect(createMock).toHaveBeenCalledWith(expect.any(Object), {
-      signal: controller.signal,
-    })
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: DEFAULT_OPENAI_MODEL,
+        reasoning: { effort: DEFAULT_OPENAI_REASONING_EFFORT },
+      }),
+      {
+        signal: controller.signal,
+      },
+    )
   })
 })

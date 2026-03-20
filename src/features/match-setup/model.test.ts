@@ -1,16 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_OPENAI_REASONING_EFFORT } from '../../actors/openai'
 import { createDefaultSideConfig } from '../../actors/registry'
 import type { MatchConfig } from '../../actors/registry'
 import {
+  clearStoredActorConfigMap,
+  loadStoredActorConfig,
+} from '../../shared/storage/actorConfigStorage'
+import {
+  clearStoredGameSession,
+  loadStoredGameSession,
+} from '../../shared/storage/gameSessionStorage'
+import {
   loadStoredMatchConfig,
-  saveStoredMatchConfig,
+  storedMatchConfig,
 } from '../../shared/storage/matchConfigStorage'
 import { createMatchSetupModel } from './model'
 
 function getLoadedConfig(): MatchConfig {
   const loaded = loadStoredMatchConfig()
 
-  if (loaded instanceof Error || loaded === null) {
+  if (loaded === null) {
     throw new Error('Expected stored match config to load successfully in test.')
   }
 
@@ -19,6 +28,9 @@ function getLoadedConfig(): MatchConfig {
 
 describe('createMatchSetupModel', () => {
   beforeEach(() => {
+    clearStoredActorConfigMap()
+    storedMatchConfig.set(null)
+    clearStoredGameSession()
     window.localStorage.clear()
   })
 
@@ -29,18 +41,21 @@ describe('createMatchSetupModel', () => {
         actorConfig: {
           apiKey: 'sk-test',
           model: 'gpt-5-mini-2025-08-07',
+          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
         },
       },
       black: createDefaultSideConfig('human'),
     }
 
-    expect(saveStoredMatchConfig(storedConfig)).toBeNull()
+    storedMatchConfig.set(storedConfig)
 
     const model = createMatchSetupModel({
       name: `test-setup-${crypto.randomUUID()}`,
       initialConfig: getLoadedConfig(),
+      activeGameSummary: null,
       startSession: vi.fn(),
       goToGame: vi.fn(),
+      resumeMatch: vi.fn(),
     })
 
     expect(model.whiteSideConfig()).toEqual(storedConfig.white)
@@ -56,8 +71,10 @@ describe('createMatchSetupModel', () => {
         white: createDefaultSideConfig('openai'),
         black: createDefaultSideConfig('human'),
       },
+      activeGameSummary: null,
       startSession,
       goToGame,
+      resumeMatch: vi.fn(),
     })
 
     const result = await model.startMatch()
@@ -80,10 +97,12 @@ describe('createMatchSetupModel', () => {
     const model = createMatchSetupModel({
       name: `test-setup-${crypto.randomUUID()}`,
       initialConfig,
+      activeGameSummary: null,
       startSession: (config) => {
         sessionConfig = config
       },
       goToGame,
+      resumeMatch: vi.fn(),
     })
 
     const result = await model.startMatch()
@@ -92,5 +111,41 @@ describe('createMatchSetupModel', () => {
     expect(sessionConfig).toEqual(initialConfig)
     expect(goToGame).toHaveBeenCalledTimes(1)
     expect(loadStoredMatchConfig()).toEqual(initialConfig)
+    expect(loadStoredGameSession()).toEqual(
+      expect.objectContaining({
+        config: initialConfig,
+        moves: [],
+      }),
+    )
+  })
+
+  it('keeps shared actor config synchronized between both sides', () => {
+    const model = createMatchSetupModel({
+      name: `test-setup-${crypto.randomUUID()}`,
+      initialConfig: {
+        white: createDefaultSideConfig('openai'),
+        black: createDefaultSideConfig('openai'),
+      },
+      activeGameSummary: null,
+      startSession: vi.fn(),
+      goToGame: vi.fn(),
+      resumeMatch: vi.fn(),
+    })
+
+    model.updateSideConfig('white', {
+      actorKey: 'openai',
+      actorConfig: {
+        apiKey: 'sk-shared',
+        model: 'gpt-5.4-mini',
+        reasoningEffort: 'medium',
+      },
+    })
+
+    expect(model.whiteSideConfig()).toEqual(model.blackSideConfig())
+    expect(loadStoredActorConfig('openai')).toEqual({
+      apiKey: 'sk-shared',
+      model: 'gpt-5.4-mini',
+      reasoningEffort: 'medium',
+    })
   })
 })

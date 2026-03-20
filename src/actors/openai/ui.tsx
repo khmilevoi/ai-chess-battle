@@ -1,12 +1,16 @@
-import type { ReactNode } from 'react'
 import type { ActorSettingsProps } from '../types'
-import type { OpenAiActorConfig } from './config.schema'
+import {
+  OPENAI_MODEL_OPTIONS,
+  OPENAI_REASONING_OPTIONS,
+  type OpenAiActorConfig,
+} from './config.schema'
+import { reatomMemo } from '../../shared/ui/reatomMemo'
 
-function FieldErrorList({
+const FieldErrorList = reatomMemo(({
   errors,
 }: {
   errors: Array<string> | undefined
-}): ReactNode {
+}) => {
   if (!errors || errors.length === 0) {
     return null
   }
@@ -18,13 +22,13 @@ function FieldErrorList({
       ))}
     </ul>
   )
-}
+}, 'FieldErrorList')
 
-export function OpenAiActorSettings({
+export const OpenAiActorSettings = reatomMemo(({
   value,
   onChange,
   errors,
-}: ActorSettingsProps<OpenAiActorConfig>) {
+}: ActorSettingsProps<OpenAiActorConfig>) => {
   return (
     <div>
       <label>
@@ -45,8 +49,7 @@ export function OpenAiActorSettings({
       <FieldErrorList errors={errors.apiKey} />
       <label>
         <span>Model</span>
-        <input
-          type="text"
+        <select
           value={value.model}
           onChange={(event) =>
             onChange({
@@ -54,10 +57,34 @@ export function OpenAiActorSettings({
               model: event.target.value,
             })
           }
-          spellCheck={false}
-        />
+        >
+          {OPENAI_MODEL_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </label>
       <FieldErrorList errors={errors.model} />
+      <label>
+        <span>Reasoning effort</span>
+        <select
+          value={value.reasoningEffort}
+          onChange={(event) =>
+            onChange({
+              ...value,
+              reasoningEffort: event.target.value as OpenAiActorConfig['reasoningEffort'],
+            })
+          }
+        >
+          {OPENAI_REASONING_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <FieldErrorList errors={errors.reasoningEffort} />
     </div>
   )
-}
+}, 'OpenAiActorSettings')

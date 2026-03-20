@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_OPENAI_MODEL } from '../../actors/openai'
+import {
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_REASONING_EFFORT,
+} from '../../actors/openai'
 import { createDefaultSideConfig } from '../../actors/registry'
 import type { MatchConfig } from '../../actors/registry'
 import { ActorError } from '../../shared/errors'
+import {
+  clearStoredGameSession,
+  createStoredGameSession,
+} from '../../shared/storage/gameSessionStorage'
 import { createGameModel } from './model'
 
 async function flush(times = 1) {
@@ -11,8 +18,28 @@ async function flush(times = 1) {
   }
 }
 
+function createOpenAiResponse(uci: string) {
+  return new Response(
+    JSON.stringify({
+      output_text: JSON.stringify({
+        from: uci.slice(0, 2),
+        to: uci.slice(2, 4),
+        promotion: uci.slice(4) || 'null',
+      }),
+      output: [],
+    }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+  )
+}
+
 describe('createGameModel', () => {
   beforeEach(() => {
+    clearStoredGameSession()
     window.localStorage.clear()
   })
 
@@ -28,6 +55,7 @@ describe('createGameModel', () => {
         white: createDefaultSideConfig('human'),
         black: createDefaultSideConfig('human'),
       },
+      initialSession: null,
       leaveToSetup: vi.fn(),
     })
 
@@ -45,6 +73,7 @@ describe('createGameModel', () => {
         white: createDefaultSideConfig('human'),
         black: createDefaultSideConfig('human'),
       },
+      initialSession: null,
       leaveToSetup: vi.fn(),
     })
 
@@ -69,6 +98,7 @@ describe('createGameModel', () => {
         white: createDefaultSideConfig('human'),
         black: createDefaultSideConfig('human'),
       },
+      initialSession: null,
       leaveToSetup: vi.fn(),
     })
 
@@ -146,6 +176,7 @@ describe('createGameModel', () => {
         actorConfig: {
           apiKey: 'sk-test',
           model: DEFAULT_OPENAI_MODEL,
+          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
         },
       },
       black: createDefaultSideConfig('human'),
@@ -154,6 +185,7 @@ describe('createGameModel', () => {
     const model = createGameModel({
       name: `test-game-${crypto.randomUUID()}`,
       config,
+      initialSession: null,
       leaveToSetup: vi.fn(),
     })
 
@@ -174,5 +206,79 @@ describe('createGameModel', () => {
     expect(snapshot?.history).toEqual(['e2e4'])
     expect(snapshot?.turn).toBe('black')
     expect(model.phase()).toBe('playing')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('continues bot versus bot matches after the first move', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    fetchMock
+      .mockResolvedValueOnce(createOpenAiResponse('e2e4'))
+      .mockResolvedValueOnce(createOpenAiResponse('e7e5'))
+      .mockImplementationOnce(() => new Promise(() => {}))
+
+    const config: MatchConfig = {
+      white: {
+        actorKey: 'openai',
+        actorConfig: {
+          apiKey: 'sk-test',
+          model: DEFAULT_OPENAI_MODEL,
+          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+        },
+      },
+      black: {
+        actorKey: 'openai',
+        actorConfig: {
+          apiKey: 'sk-test',
+          model: DEFAULT_OPENAI_MODEL,
+          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+        },
+      },
+    }
+
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      config,
+      initialSession: null,
+      leaveToSetup: vi.fn(),
+    })
+
+    const startResult = await model.startMatch()
+
+    expect(startResult).toBeNull()
+
+    await flush(4)
+
+    const snapshot = model.snapshot()
+    expect(snapshot?.history.slice(0, 2)).toEqual(['e2e4', 'e7e5'])
+    expect(snapshot?.turn).toBe('white')
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+
+    model.dispose()
+  })
+
+  it('replays a stored session and continues from the restored position', async () => {
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      initialSession: createStoredGameSession({
+        config: {
+          white: createDefaultSideConfig('human'),
+          black: createDefaultSideConfig('human'),
+        },
+        moves: ['e2e4', 'e7e5'],
+      }),
+      leaveToSetup: vi.fn(),
+    })
+
+    const startResult = await model.startMatch()
+
+    expect(startResult).toBeNull()
+    expect(model.snapshot()?.history).toEqual(['e2e4', 'e7e5'])
+    expect(model.snapshot()?.turn).toBe('white')
   })
 })

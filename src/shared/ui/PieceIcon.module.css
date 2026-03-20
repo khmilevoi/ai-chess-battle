@@ -1,7 +1,11 @@
 .sprite {
-    background-image: url('../../assets/chess.svg');
-    background-size: 550%;
-    background-repeat: no-repeat;
-    width: 100%;
-    height: 100%;
+  background-image: url('../../assets/chess.svg');
+  background-size: 600% 200%;
+  background-repeat: no-repeat;
+  width: 100%;
+  height: 100%;
+  filter:
+    drop-shadow(0 0 1px rgba(255, 255, 255, 0.55))
+    drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3))
+    drop-shadow(0 5px 8px rgba(0, 0, 0, 0.22));
 }

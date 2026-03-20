@@ -2,6 +2,7 @@ import { ActorConfigError } from '../../shared/errors'
 import { defineActor } from '../types'
 import {
   DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_REASONING_EFFORT,
   openAiActorConfigSchema,
 } from './config.schema'
 import { OpenAiActorRuntime } from './model'
@@ -15,6 +16,7 @@ export const OpenAiActor = defineActor({
   createDefaultConfig: () => ({
     apiKey: '',
     model: DEFAULT_OPENAI_MODEL,
+    reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
   }),
   SettingsComponent: OpenAiActorSettings,
   create(config) {
@@ -33,4 +35,14 @@ export const OpenAiActor = defineActor({
 })
 
 export { DEFAULT_OPENAI_MODEL } from './config.schema'
-export type { OpenAiActorConfig } from './config.schema'
+export {
+  DEFAULT_OPENAI_REASONING_EFFORT,
+  OPENAI_MODEL_OPTIONS,
+  OPENAI_REASONING_OPTIONS,
+} from './config.schema'
+export type {
+  OpenAiActorConfig,
+  OpenAiModelOption,
+  OpenAiReasoningEffort,
+  OpenAiReasoningOption,
+} from './config.schema'

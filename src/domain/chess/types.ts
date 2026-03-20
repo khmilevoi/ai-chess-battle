@@ -87,6 +87,23 @@ export function toUciMove(
   return `${from}${to}${promotion ?? ''}`
 }
 
+export function parseUciMove(uci: UciMove): ActorMove | null {
+  const match = /^([a-h][1-8])([a-h][1-8])([qrbn])?$/.exec(uci)
+
+  if (!match) {
+    return null
+  }
+
+  const [, from, to, promotion] = match
+
+  return {
+    from,
+    to,
+    promotion: promotion as PromotionPiece | undefined,
+    uci,
+  }
+}
+
 export function oppositeSide(side: Side): Side {
   return side === 'white' ? 'black' : 'white'
 }

@@ -1,5 +1,6 @@
 import * as errore from 'errore'
-import { abortVar, action, reatomRoute } from '@reatom/core'
+import { abortVar, action, effect, reatomRoute, urlAtom } from '@reatom/core'
+import { Children, Fragment, type ReactNode } from 'react'
 import { matchSessionConfig } from './model'
 import { MatchSetupPage } from '../features/match-setup/MatchSetupPage'
 import { createMatchSetupModel } from '../features/match-setup/model'
@@ -7,12 +8,25 @@ import { GamePage } from '../features/game/GamePage'
 import { createGameModel } from '../features/game/model'
 import {
   fallbackMatchConfig,
-  loadStoredMatchConfig,
+  readStoredMatchConfig,
 } from '../shared/storage/matchConfigStorage'
+import {
+  clearStoredGameSession,
+  readStoredGameSession,
+  summarizeStoredGameSession,
+} from '../shared/storage/gameSessionStorage'
 import styles from './App.module.css'
+
+function renderOutletChildren(outlet: () => ReactNode) {
+  return Children.map(outlet(), (child, index) => (
+    <Fragment key={`route-outlet-${index}`}>{child}</Fragment>
+  ))
+}
 
 export const rootRoute = reatomRoute({
   render({ outlet }) {
+    const content = renderOutletChildren(outlet)
+
     return (
       <div className={styles.shell}>
         <div className={styles.content}>
@@ -22,7 +36,7 @@ export const rootRoute = reatomRoute({
               <h1 className={styles.name}>AI Chess Battle</h1>
             </div>
           </header>
-          {outlet()}
+          {content.length > 0 ? content : <div className={styles.routePlaceholder}>Redirecting…</div>}
         </div>
       </div>
     )
@@ -33,29 +47,40 @@ export const setupRoute = rootRoute.reatomRoute({
   path: '',
   exactRender: true,
   async loader() {
-    const loadedConfig = loadStoredMatchConfig()
-    const initialConfig =
-      loadedConfig instanceof Error || loadedConfig === null
-        ? fallbackMatchConfig()
-        : loadedConfig
+    const loadedConfig = readStoredMatchConfig()
+    const storedGameSession = readStoredGameSession()
+    const initialConfig = loadedConfig === null ? fallbackMatchConfig() : loadedConfig
+    const activeGameSummary = (() => {
+      if (storedGameSession === null) {
+        return null
+      }
 
-    if (loadedConfig instanceof Error) {
-      console.warn(loadedConfig)
-    }
+      const summary = summarizeStoredGameSession(storedGameSession)
+
+      if (!(summary instanceof Error)) {
+        return summary
+      }
+
+      console.warn(summary)
+      clearStoredGameSession()
+      matchSessionConfig.set(null)
+
+      return null
+    })()
 
     const model = createMatchSetupModel({
       name: 'setupRoute.model',
       initialConfig,
+      activeGameSummary,
       startSession: (config) => matchSessionConfig.set(config),
       goToGame: (config) => {
         gameRoute.go({ config }, true)
       },
+      resumeMatch: (config) => {
+        matchSessionConfig.set(config)
+        gameRoute.go({ config }, true)
+      },
     })
-
-    if (loadedConfig instanceof Error) {
-      model.setupError.set(loadedConfig)
-    }
-
     return model
   },
   render(self) {
@@ -88,7 +113,7 @@ const sessionRoute = rootRoute.reatomRoute({
     return null
   },
   render({ outlet }) {
-    return <>{outlet()}</>
+    return <>{renderOutletChildren(outlet)}</>
   },
 }, 'routes.session')
 
@@ -97,9 +122,12 @@ export const gameRoute = sessionRoute.reatomRoute({
   exactRender: true,
   async loader({ config }) {
     try {
+      const storedGameSession = readStoredGameSession()
+      const initialSession = storedGameSession === null ? null : storedGameSession
       const model = createGameModel({
         name: 'gameRoute.model',
         config,
+        initialSession,
         leaveToSetup: () => {
           matchSessionConfig.set(null)
           setupRoute.go(undefined, true)
@@ -108,7 +136,6 @@ export const gameRoute = sessionRoute.reatomRoute({
 
       const cleanup = action(() => {
         model.dispose()
-        matchSessionConfig.set(null)
         return null
       }, 'routes.game.cleanup')
 
@@ -116,14 +143,17 @@ export const gameRoute = sessionRoute.reatomRoute({
         abortVar.spawn(cleanup)
       })
 
-      const startResult = await model.startMatch()
+      void model.startMatch().then((startResult) => {
+        if (!(startResult instanceof Error)) {
+          return
+        }
 
-      if (startResult instanceof Error) {
         console.warn(startResult)
+        clearStoredGameSession()
+        matchSessionConfig.set(null)
         cleanup()
         setupRoute.go(undefined, true)
-        return null
-      }
+      })
 
       return model
     } catch (error) {
@@ -135,16 +165,26 @@ export const gameRoute = sessionRoute.reatomRoute({
     }
   },
   render(self) {
-    if (!self.loader.ready()) {
-      return <div>Loading match...</div>
-    }
-
     const model = self.loader.data()
 
-    if (model == null) {
-      return <></>
+    if (model == null || model.snapshot() === null) {
+      return <div>Loading match...</div>
     }
 
     return <GamePage model={model} />
   },
 }, 'routes.game')
+
+effect(() => {
+  const currentUrl = urlAtom()
+
+  if (currentUrl.pathname !== '/game') {
+    return
+  }
+
+  if (matchSessionConfig() !== null) {
+    return
+  }
+
+  setupRoute.go(undefined, true)
+}, 'routes.redirectMissingGameSession')

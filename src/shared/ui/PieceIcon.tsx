@@ -1,10 +1,10 @@
 import type { PieceSnapshot } from '../../domain/chess/types'
-import styles from './PieceIcon.module.css';
-import clsx from 'clsx';
+import styles from './PieceIcon.module.css'
+import { reatomMemo } from './reatomMemo'
 
 const positions = {
   white: {
-    king: [-1, 0],
+    king: [0, 0],
     queen: [20, 0],
     bishop: [40, 0],
     knight: [60, 0],
@@ -12,7 +12,7 @@ const positions = {
     pawn: [100, 0],
   },
   black: {
-    king: [-1, 100],
+    king: [0, 100],
     queen: [20, 100],
     bishop: [40, 100],
     knight: [60, 100],
@@ -21,8 +21,19 @@ const positions = {
   },
 } as const
 
-export function PieceIcon({ piece }: { piece: PieceSnapshot }) {
+export const PieceIcon = reatomMemo(({
+  piece,
+}: {
+  piece: PieceSnapshot
+}) => {
   const [x, y] = positions[piece.side][piece.type]
 
-  return <div className={clsx(styles.sprite, piece.side, piece.type)} style={{ backgroundPosition: `${x}% ${y}%` }}></div>
-}
+  return (
+    <div
+      className={styles.sprite}
+      data-side={piece.side}
+      data-type={piece.type}
+      style={{ backgroundPosition: `${x}% ${y}%` }}
+    />
+  )
+}, 'PieceIcon')

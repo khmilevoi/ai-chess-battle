@@ -161,7 +161,7 @@ export class OpenAiActorRuntime implements AutonomousActor {
         {
           model: this.config.model,
           store: false,
-          reasoning: { effort: 'high' },
+          reasoning: { effort: this.config.reasoningEffort },
           instructions: buildInstructions(),
           input: buildPrompt(context, retryMessage),
           text: {

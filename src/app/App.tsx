@@ -1,6 +1,6 @@
-import { reatomComponent } from '@reatom/react'
 import { rootRoute } from './routes'
+import { reatomMemo } from '../shared/ui/reatomMemo'
 
-export const App = reatomComponent(() => {
+export const App = reatomMemo(() => {
   return rootRoute.render()
 }, 'App')

@@ -1,6 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { HumanActor } from './human'
-import { DEFAULT_OPENAI_MODEL, OpenAiActor } from './openai'
+import {
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_REASONING_EFFORT,
+  OpenAiActor,
+} from './openai'
 import type { OpenAiActorRuntime } from './openai/model'
 import {
   actorRegistry,
@@ -37,10 +41,12 @@ describe('actor registry', () => {
       actorConfig: {
         apiKey: '',
         model: DEFAULT_OPENAI_MODEL,
+        reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
       },
     })
     expect(HumanActor.configSchema.safeParse(human.actorConfig).success).toBe(true)
     expect(openai.actorConfig.model).toBe(DEFAULT_OPENAI_MODEL)
+    expect(openai.actorConfig.reasoningEffort).toBe(DEFAULT_OPENAI_REASONING_EFFORT)
   })
 
   it('derives helper types from descriptors and registry', () => {

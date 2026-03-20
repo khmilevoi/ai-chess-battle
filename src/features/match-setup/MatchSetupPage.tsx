@@ -1,28 +1,23 @@
-import { useAction, useAtom } from '@reatom/react'
 import { isActorKey } from '../../actors/registry'
 import { presentError } from '../../shared/errors'
+import { reatomMemo } from '../../shared/ui/reatomMemo'
 import { ActorSettingsFields } from './actorSettings'
 import type { MatchSetupModel } from './model'
 import styles from './MatchSetupPage.module.css'
 
-function ActorCard({
+const ActorCard = reatomMemo(({
   side,
   model,
 }: {
   side: 'white' | 'black'
   model: MatchSetupModel
-}) {
-  const [sideConfig] = useAtom(
-    side === 'white' ? model.whiteSideConfig : model.blackSideConfig,
-  )
-  const [validation] = useAtom(
-    side === 'white' ? model.whiteValidation : model.blackValidation,
-  )
-  const [actor] = useAtom(
-    side === 'white' ? model.whiteActorDefinition : model.blackActorDefinition,
-  )
-  const setSideActor = useAction(model.setSideActor)
-  const updateSideConfig = useAction(model.updateSideConfig)
+}) => {
+  const sideConfig =
+    side === 'white' ? model.whiteSideConfig() : model.blackSideConfig()
+  const validation =
+    side === 'white' ? model.whiteValidation() : model.blackValidation()
+  const actor =
+    side === 'white' ? model.whiteActorDefinition() : model.blackActorDefinition()
   const panelClass =
     side === 'white'
       ? `${styles.panel} ${styles.lightPanel}`
@@ -44,7 +39,7 @@ function ActorCard({
               const nextActorKey = event.target.value
 
               if (isActorKey(nextActorKey)) {
-                setSideActor(side, nextActorKey)
+                model.setSideActor(side, nextActorKey)
               }
             }}
           >
@@ -60,7 +55,7 @@ function ActorCard({
         <ActorSettingsFields
           side={side}
           sideConfig={sideConfig}
-          onChange={(next) => updateSideConfig(side, next)}
+          onChange={(next) => model.updateSideConfig(side, next)}
           errors={validation.fieldErrors}
         />
       </div>
@@ -71,16 +66,16 @@ function ActorCard({
       ) : null}
     </section>
   )
-}
+}, 'ActorCard')
 
-export function MatchSetupPage({
+export const MatchSetupPage = reatomMemo(({
   model,
 }: {
   model: MatchSetupModel
-}) {
-  const [canStart] = useAtom(model.canStart)
-  const [setupError] = useAtom(model.setupError)
-  const startMatch = useAction(model.startMatch)
+}) => {
+  const canStart = model.canStart()
+  const setupError = model.setupError()
+  const activeGameSummary = model.activeGameSummary()
 
   return (
     <div className={styles.page}>
@@ -92,6 +87,32 @@ export function MatchSetupPage({
           differ by actor implementation and config.
         </p>
       </header>
+
+      {activeGameSummary ? (
+        <section className={styles.resumeCard}>
+          <div className={styles.resumeMeta}>
+            <p className={styles.eyebrow}>Active match</p>
+            <h2 className={styles.resumeTitle}>Resume your last game</h2>
+            <p className={styles.resumeSummary}>{activeGameSummary.statusText}</p>
+            <div className={styles.resumeFacts}>
+              <span>{activeGameSummary.moveCount} moves played</span>
+              <span>{activeGameSummary.turn} turn</span>
+              <span>{activeGameSummary.isFinished ? 'finished' : 'in progress'}</span>
+            </div>
+          </div>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.secondaryAction}
+              onClick={() => {
+                model.resumeActiveMatch()
+              }}
+            >
+              Resume Match
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <div className={styles.grid}>
         <ActorCard side="white" model={model} />
@@ -108,7 +129,7 @@ export function MatchSetupPage({
           className={styles.primaryAction}
           disabled={!canStart}
           onClick={() => {
-            void startMatch()
+            void model.startMatch()
           }}
         >
           Start Match
@@ -116,4 +137,4 @@ export function MatchSetupPage({
       </div>
     </div>
   )
-}
+}, 'MatchSetupPage')
