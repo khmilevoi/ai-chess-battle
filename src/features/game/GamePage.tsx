@@ -1,56 +1,33 @@
 import { useAction, useAtom } from '@reatom/react'
-import { appModel } from '../../app/model'
-import { setupRoute } from '../../app/routes'
 import { Board } from '../board/Board'
 import { presentError } from '../../shared/errors'
+import type { GameModel } from './model'
 import styles from './GamePage.module.css'
 
-function formatStatus(snapshot: NonNullable<ReturnType<typeof appModel.snapshot>>) {
-  const status = snapshot.status
-
-  if (status.kind === 'active') {
-    return `${status.turn} to move`
-  }
-
-  if (status.kind === 'check') {
-    return `${status.turn} is in check`
-  }
-
-  if (status.kind === 'checkmate') {
-    return `${status.winner} wins by checkmate`
-  }
-
-  if (status.kind === 'stalemate') {
-    return 'Stalemate'
-  }
-
-  return `Draw: ${status.reason}`
-}
-
-export function GamePage() {
-  const [snapshot] = useAtom(appModel.snapshot)
-  const [phase] = useAtom(appModel.phase)
-  const [runtimeError] = useAtom(appModel.runtimeError)
-  const [selectedSquare] = useAtom(appModel.selectedSquare)
-  const [selectedLegalMoves] = useAtom(appModel.selectedLegalMoves)
-  const [movableSquares] = useAtom(appModel.movableSquares)
-  const [activeHumanActor] = useAtom(appModel.activeHumanActor)
-  const clickSquare = useAction(appModel.clickSquare)
-  const retryTurn = useAction(appModel.retryTurn)
-  const resetMatch = useAction(appModel.resetMatch)
+export function GamePage({
+  model,
+}: {
+  model: GameModel
+}) {
+  const [snapshot] = useAtom(model.snapshot)
+  const [phase] = useAtom(model.phase)
+  const [runtimeError] = useAtom(model.runtimeError)
+  const [selectedSquare] = useAtom(model.selectedSquare)
+  const [selectedLegalMoves] = useAtom(model.selectedLegalMoves)
+  const [movableSquares] = useAtom(model.movableSquares)
+  const [statusText] = useAtom(model.statusText)
+  const [historyText] = useAtom(model.historyText)
+  const [boardInteractive] = useAtom(model.boardInteractive)
+  const clickSquare = useAction(model.clickSquare)
+  const retryTurn = useAction(model.retryTurn)
+  const leaveMatch = useAction(model.leaveMatch)
 
   if (!snapshot) {
     return (
       <div className={styles.page}>
         <div className={styles.errorBox}>No active match.</div>
         <div className={styles.actions}>
-          <button
-            type="button"
-            onClick={() => {
-              resetMatch()
-              setupRoute.go(undefined, true)
-            }}
-          >
+          <button type="button" onClick={() => leaveMatch()}>
             Back to setup
           </button>
         </div>
@@ -64,7 +41,7 @@ export function GamePage() {
         <div>
           <h1 className={styles.title}>Live Match</h1>
           <div className={styles.meta}>
-            <span>{formatStatus(snapshot)}</span>
+            <span>{statusText}</span>
             <span>{snapshot.history.length} moves logged</span>
             <span>{snapshot.turn} turn</span>
           </div>
@@ -80,13 +57,7 @@ export function GamePage() {
               Retry turn
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              resetMatch()
-              setupRoute.go(undefined, true)
-            }}
-          >
+          <button type="button" onClick={() => leaveMatch()}>
             Back to setup
           </button>
         </div>
@@ -104,7 +75,7 @@ export function GamePage() {
             selectedSquare={selectedSquare}
             legalTargets={selectedLegalMoves}
             movableSquares={movableSquares}
-            interactive={phase === 'playing' && activeHumanActor !== null}
+            interactive={boardInteractive}
             onSquareClick={(square) => {
               clickSquare(square)
             }}
@@ -115,9 +86,7 @@ export function GamePage() {
           <h2 className={styles.panelTitle}>Position</h2>
           <div className={styles.monoBlock}>{snapshot.fen}</div>
           <h2 className={styles.panelTitle}>Move History</h2>
-          <div className={styles.monoBlock}>
-            {snapshot.history.length === 0 ? 'No moves yet.' : snapshot.history.join('\n')}
-          </div>
+          <div className={styles.monoBlock}>{historyText}</div>
         </aside>
       </div>
     </div>

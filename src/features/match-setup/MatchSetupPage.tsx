@@ -1,26 +1,28 @@
 import { useAction, useAtom } from '@reatom/react'
-import { appModel } from '../../app/model'
-import { gameRoute } from '../../app/routes'
+import { isActorKey } from '../../actors/registry'
 import { presentError } from '../../shared/errors'
+import { ActorSettingsFields } from './actorSettings'
+import type { MatchSetupModel } from './model'
 import styles from './MatchSetupPage.module.css'
 
 function ActorCard({
   side,
+  model,
 }: {
   side: 'white' | 'black'
+  model: MatchSetupModel
 }) {
   const [sideConfig] = useAtom(
-    side === 'white' ? appModel.whiteSideConfig : appModel.blackSideConfig,
+    side === 'white' ? model.whiteSideConfig : model.blackSideConfig,
   )
   const [validation] = useAtom(
-    side === 'white' ? appModel.whiteValidation : appModel.blackValidation,
+    side === 'white' ? model.whiteValidation : model.blackValidation,
   )
-  const setSideActor = useAction(appModel.setSideActor)
-  const updateSideConfig = useAction(appModel.updateSideConfig)
-  const actor = appModel.availableActors.find(
-    (entry) => entry.key === sideConfig.actorKey,
-  )!
-  const SettingsComponent = actor.SettingsComponent
+  const [actor] = useAtom(
+    side === 'white' ? model.whiteActorDefinition : model.blackActorDefinition,
+  )
+  const setSideActor = useAction(model.setSideActor)
+  const updateSideConfig = useAction(model.updateSideConfig)
   const panelClass =
     side === 'white'
       ? `${styles.panel} ${styles.lightPanel}`
@@ -38,11 +40,15 @@ function ActorCard({
           <span>Actor</span>
           <select
             value={sideConfig.actorKey}
-            onChange={(event) =>
-              setSideActor(side, event.target.value as typeof sideConfig.actorKey)
-            }
+            onChange={(event) => {
+              const nextActorKey = event.target.value
+
+              if (isActorKey(nextActorKey)) {
+                setSideActor(side, nextActorKey)
+              }
+            }}
           >
-            {appModel.availableActors.map((entry) => (
+            {model.availableActors.map((entry) => (
               <option key={entry.key} value={entry.key}>
                 {entry.displayName}
               </option>
@@ -51,9 +57,9 @@ function ActorCard({
         </label>
       </div>
       <div className={styles.customFields}>
-        <SettingsComponent
+        <ActorSettingsFields
           side={side}
-          value={sideConfig.actorConfig as never}
+          sideConfig={sideConfig}
           onChange={(next) => updateSideConfig(side, next)}
           errors={validation.fieldErrors}
         />
@@ -67,12 +73,14 @@ function ActorCard({
   )
 }
 
-export function MatchSetupPage() {
-  const [readyConfig] = useAtom(appModel.whiteValidation)
-  const [blackValidation] = useAtom(appModel.blackValidation)
-  const [setupError] = useAtom(appModel.setupError)
-  const startMatch = useAction(appModel.startMatch)
-  const canStart = readyConfig.config !== null && blackValidation.config !== null
+export function MatchSetupPage({
+  model,
+}: {
+  model: MatchSetupModel
+}) {
+  const [canStart] = useAtom(model.canStart)
+  const [setupError] = useAtom(model.setupError)
+  const startMatch = useAction(model.startMatch)
 
   return (
     <div className={styles.page}>
@@ -86,8 +94,8 @@ export function MatchSetupPage() {
       </header>
 
       <div className={styles.grid}>
-        <ActorCard side="white" />
-        <ActorCard side="black" />
+        <ActorCard side="white" model={model} />
+        <ActorCard side="black" model={model} />
       </div>
 
       {setupError ? (
@@ -99,11 +107,8 @@ export function MatchSetupPage() {
           type="button"
           className={styles.primaryAction}
           disabled={!canStart}
-          onClick={async () => {
-            const result = await startMatch()
-            if (!(result instanceof Error)) {
-              gameRoute.go(undefined, true)
-            }
+          onClick={() => {
+            void startMatch()
           }}
         >
           Start Match

@@ -1,0 +1,7 @@
+.sprite {
+    background-image: url('../../assets/chess.svg');
+    background-size: 550%;
+    background-repeat: no-repeat;
+    width: 100%;
+    height: 100%;
+}

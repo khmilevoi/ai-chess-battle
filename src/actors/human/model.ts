@@ -3,7 +3,8 @@ import {
   TurnCancelledError,
   type ActorRequestError,
 } from '../../shared/errors'
-import type { ActorMove, GameActor } from '../chess/types'
+import type { ActorMove } from '../../domain/chess/types'
+import type { InteractiveActor } from '../types'
 
 type PendingMoveRequest = {
   resolve: (result: ActorMove | ActorRequestError) => void
@@ -11,7 +12,7 @@ type PendingMoveRequest = {
 }
 
 function toTurnCancelledError(
-  side: Parameters<GameActor['requestMove']>[0]['context']['side'],
+  side: Parameters<InteractiveActor['requestMove']>[0]['context']['side'],
   reason: unknown,
 ): TurnCancelledError {
   if (reason instanceof TurnCancelledError) {
@@ -24,13 +25,15 @@ function toTurnCancelledError(
   })
 }
 
-export class HumanActor implements GameActor {
+export class HumanActorRuntime implements InteractiveActor {
+  readonly kind = 'interactive'
+
   private pending: PendingMoveRequest | null = null
 
   async requestMove({
     context,
     signal,
-  }: Parameters<GameActor['requestMove']>[0]) {
+  }: Parameters<InteractiveActor['requestMove']>[0]) {
     if (this.pending) {
       return new ActorError({
         message: 'Human actor is already waiting for a move.',

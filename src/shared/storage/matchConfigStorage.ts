@@ -4,8 +4,8 @@ import {
   createDefaultMatchConfig,
   matchSideDraftSchema,
   validateSideConfig,
-} from '../../domain/actors/registry'
-import type { MatchConfig, MatchSideConfig } from '../../domain/actors/types'
+} from '../../actors/registry'
+import type { MatchConfig, MatchSideConfig } from '../../actors/registry'
 
 const STORAGE_KEY = 'ai-chess-battle.match-config'
 type ParsedStorageValue =
@@ -38,7 +38,13 @@ function parseStoredSide(
     })
   }
 
-  return validated.config as MatchSideConfig
+  if (validated.config === null) {
+    return new StorageError({
+      message: `Stored ${side} side config is incomplete.`,
+    })
+  }
+
+  return validated.config
 }
 
 export function loadStoredMatchConfig(): MatchConfig | StorageError | null {

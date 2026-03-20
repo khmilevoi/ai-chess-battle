@@ -35,6 +35,7 @@
 
 .panel {
   display: grid;
+  align-items: flex-start;
   gap: 18px;
   min-height: 100%;
   padding: 24px;

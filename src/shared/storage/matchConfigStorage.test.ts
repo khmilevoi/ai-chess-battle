@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { StorageError } from '../errors'
-import { createDefaultMatchConfig } from '../../domain/actors/registry'
+import { createDefaultMatchConfig } from '../../actors/registry'
 import {
   loadStoredMatchConfig,
   saveStoredMatchConfig,

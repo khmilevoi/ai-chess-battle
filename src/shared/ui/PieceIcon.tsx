@@ -1,44 +1,28 @@
 import type { PieceSnapshot } from '../../domain/chess/types'
+import styles from './PieceIcon.module.css';
+import clsx from 'clsx';
 
-const glyphs = {
+const positions = {
   white: {
-    king: '♔',
-    queen: '♕',
-    rook: '♖',
-    bishop: '♗',
-    knight: '♘',
-    pawn: '♙',
+    king: [-1, 0],
+    queen: [20, 0],
+    bishop: [40, 0],
+    knight: [60, 0],
+    rook: [80, 0],
+    pawn: [100, 0],
   },
   black: {
-    king: '♚',
-    queen: '♛',
-    rook: '♜',
-    bishop: '♝',
-    knight: '♞',
-    pawn: '♟',
+    king: [-1, 100],
+    queen: [20, 100],
+    bishop: [40, 100],
+    knight: [60, 100],
+    rook: [80, 100],
+    pawn: [100, 100],
   },
 } as const
 
 export function PieceIcon({ piece }: { piece: PieceSnapshot }) {
-  const glyph = glyphs[piece.side][piece.type]
-  const fill = piece.side === 'white' ? '#ffffff' : '#050505'
-  const stroke = piece.side === 'white' ? '#050505' : '#ffffff'
+  const [x, y] = positions[piece.side][piece.type]
 
-  return (
-    <svg viewBox="0 0 100 100" aria-hidden="true">
-      <rect width="100" height="100" fill="none" />
-      <text
-        x="50"
-        y="68"
-        textAnchor="middle"
-        fontSize="64"
-        fontFamily="'Iowan Old Style', 'Palatino Linotype', serif"
-        fill={fill}
-        stroke={stroke}
-        strokeWidth="2"
-      >
-        {glyph}
-      </text>
-    </svg>
-  )
+  return <div className={clsx(styles.sprite, piece.side, piece.type)} style={{ backgroundPosition: `${x}% ${y}%` }}></div>
 }

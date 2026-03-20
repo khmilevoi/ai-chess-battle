@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import OpenAI from 'openai'
+import type { Response as OpenAiResponse } from 'openai/resources/responses/responses'
 import {
   IllegalMoveError,
   OpenAiHttpError,
@@ -6,7 +8,7 @@ import {
 } from '../../shared/errors'
 import { createChessEngine } from '../chess/createChessEngine'
 import type { ActorContext } from '../chess/types'
-import { DEFAULT_OPENAI_MODEL, OpenAiActor } from './openAiActor'
+import { DEFAULT_OPENAI_MODEL, OpenAiActor } from '../../actors/openai'
 
 function createActorContext(): ActorContext {
   const engine = createChessEngine()
@@ -33,12 +35,8 @@ function createActorContext(): ActorContext {
 function createSuccessResponse(payload: string) {
   return new Response(
     JSON.stringify({
-      output: [
-        {
-          type: 'message',
-          content: [{ type: 'output_text', text: payload }],
-        },
-      ],
+      output_text: payload,
+      output: [],
     }),
     {
       status: 200,
@@ -61,7 +59,11 @@ describe('OpenAiActor', () => {
 
   it('returns transport errors as values', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
-    const actor = new OpenAiActor(config)
+    const actor = OpenAiActor.create(config)
+
+    if (actor instanceof Error) {
+      throw actor
+    }
 
     const result = await actor.requestMove({
       context: createActorContext(),
@@ -74,10 +76,16 @@ describe('OpenAiActor', () => {
   it('retries once after a schema mismatch and returns the legal move', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(createSuccessResponse('{"from":"e2"}'))
       .mockResolvedValueOnce(createSuccessResponse('{"from":"e2","to":"e4"}'))
+      .mockResolvedValueOnce(
+        createSuccessResponse('{"from":"e2","to":"e4","promotion":"null"}'),
+      )
     vi.stubGlobal('fetch', fetchMock)
-    const actor = new OpenAiActor(config)
+    const actor = OpenAiActor.create(config)
+
+    if (actor instanceof Error) {
+      throw actor
+    }
 
     const result = await actor.requestMove({
       context: createActorContext(),
@@ -96,10 +104,18 @@ describe('OpenAiActor', () => {
   it('retries once and then returns an illegal move error when the move stays invalid', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(createSuccessResponse('{"from":"e2","to":"e5"}'))
-      .mockResolvedValueOnce(createSuccessResponse('{"from":"e2","to":"e5"}'))
+      .mockResolvedValueOnce(
+        createSuccessResponse('{"from":"e2","to":"e5","promotion":"null"}'),
+      )
+      .mockResolvedValueOnce(
+        createSuccessResponse('{"from":"e2","to":"e5","promotion":"null"}'),
+      )
     vi.stubGlobal('fetch', fetchMock)
-    const actor = new OpenAiActor(config)
+    const actor = OpenAiActor.create(config)
+
+    if (actor instanceof Error) {
+      throw actor
+    }
 
     const result = await actor.requestMove({
       context: createActorContext(),
@@ -117,7 +133,11 @@ describe('OpenAiActor', () => {
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
-    const actor = new OpenAiActor(config)
+    const actor = OpenAiActor.create(config)
+
+    if (actor instanceof Error) {
+      throw actor
+    }
 
     const result = await actor.requestMove({
       context: createActorContext(),
@@ -126,5 +146,33 @@ describe('OpenAiActor', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(result).toBeInstanceOf(OpenAiHttpError)
+  })
+
+  it('passes the abort signal to the SDK request options', async () => {
+    const actor = OpenAiActor.create(config)
+
+    if (actor instanceof Error) {
+      throw actor
+    }
+
+    const controller = new AbortController()
+    const client = Reflect.get(actor, 'client') as OpenAI
+    const createMock = vi
+      .spyOn(client.responses, 'create')
+      .mockResolvedValue({
+        output_text: '{"from":"e2","to":"e4","promotion":"null"}',
+        output: [],
+      } as unknown as OpenAiResponse)
+
+    const result = await actor.requestMove({
+      context: createActorContext(),
+      signal: controller.signal,
+    })
+
+    expect(result).not.toBeInstanceOf(Error)
+    expect(createMock).toHaveBeenCalledTimes(1)
+    expect(createMock).toHaveBeenCalledWith(expect.any(Object), {
+      signal: controller.signal,
+    })
   })
 })
