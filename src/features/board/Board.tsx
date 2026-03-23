@@ -1,7 +1,7 @@
 import styles from './Board.module.css'
-import type { BoardSnapshot, Square } from '../../domain/chess/types'
-import { PieceIcon } from '../../shared/ui/PieceIcon'
-import { reatomMemo } from '../../shared/ui/reatomMemo'
+import type { BoardSnapshot, Square } from '@/domain/chess/types'
+import { PieceIcon } from '@/shared/ui/PieceIcon'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 const ranks = ['8', '7', '6', '5', '4', '3', '2', '1']

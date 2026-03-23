@@ -1,13 +1,13 @@
 import { atom, computed, peek, withLocalStorage } from '@reatom/core'
-import { type MatchConfig } from '../../actors/registry'
-import { createChessEngine } from '../../domain/chess/createChessEngine'
+import { type MatchConfig } from '@/actors/registry'
+import { createChessEngine } from '@/domain/chess/createChessEngine'
 import {
   isTerminalStatus,
   parseUciMove,
   type BoardSnapshot,
   type ChessEngineFacade,
   type UciMove,
-} from '../../domain/chess/types'
+} from '@/domain/chess/types'
 import { StorageError } from '../errors'
 import { normalizeStoredMatchConfigValue } from './helpers'
 

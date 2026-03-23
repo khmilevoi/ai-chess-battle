@@ -1,5 +1,5 @@
-import { SecondaryButton } from '../../shared/ui/Button'
-import { reatomMemo } from '../../shared/ui/reatomMemo'
+import { SecondaryButton } from '@/shared/ui/Button'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 import type { GamesModel } from './model'
 import styles from './GamesPage.module.css'
 

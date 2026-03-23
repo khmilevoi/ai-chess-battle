@@ -1,7 +1,7 @@
 import * as errore from 'errore'
 import { z } from 'zod'
-import { IllegalMoveError } from '../../shared/errors'
-import { toUciMove, type ActorMove } from '../../domain/chess/types'
+import { IllegalMoveError } from '@/shared/errors'
+import { toUciMove, type ActorMove } from '@/domain/chess/types'
 import type { AiActorRequestArgs } from './model'
 
 type ParsedJsonValue =

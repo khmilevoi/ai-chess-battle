@@ -6,8 +6,8 @@ import {
   GoogleGenAiTransportError,
   IllegalMoveError,
   type ActorRequestError,
-} from '../../../shared/errors'
-import { type ActorMove } from '../../../domain/chess/types'
+} from '@/shared/errors'
+import { type ActorMove } from '@/domain/chess/types'
 import {
   AI_ACTOR_MAX_OUTPUT_TOKENS,
   AI_ACTOR_MOVE_JSON_SCHEMA,

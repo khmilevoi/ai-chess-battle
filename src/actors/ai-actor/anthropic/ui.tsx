@@ -4,7 +4,7 @@ import {
   ANTHROPIC_MODEL_OPTIONS,
   type AnthropicActorConfig,
 } from './config.schema'
-import { reatomMemo } from '../../../shared/ui/reatomMemo'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 
 export const AnthropicActorSettings = reatomMemo(({
   value,

@@ -11,12 +11,12 @@ import {
   withConnectHook,
   wrap,
 } from '@reatom/core'
-import { getRegisteredActor } from '../../actors/registry'
+import { getRegisteredActor } from '@/actors/registry'
 import type {
   ActorModel,
   MatchConfig,
   MatchSideConfig,
-} from '../../actors/registry'
+} from '@/actors/registry'
 import {
   isTerminalStatus,
   toUciMove,
@@ -26,7 +26,7 @@ import {
   type ChessEngineFacade,
   type GameActor,
   type Square,
-} from '../../domain/chess/types'
+} from '@/domain/chess/types'
 import {
   activeGameIdAtom,
   replayStoredGameRecord,
@@ -35,8 +35,8 @@ import {
   storedGameRecordAtom,
   updateStoredGameRecord,
   type StoredGameActorControls,
-} from '../../shared/storage/gameSessionStorage'
-import { StorageError, TurnCancelledError } from '../../shared/errors'
+} from '@/shared/storage/gameSessionStorage'
+import { StorageError, TurnCancelledError } from '@/shared/errors'
 
 type SideActors = Record<
   BoardSnapshot['turn'],

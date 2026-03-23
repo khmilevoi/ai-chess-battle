@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { named } from '@reatom/core'
-import type { ActorContext, ActorMove, Side } from '../../domain/chess/types'
-import { ActorError, TurnCancelledError } from '../../shared/errors'
+import type { ActorContext, ActorMove, Side } from '@/domain/chess/types'
+import { ActorError, TurnCancelledError } from '@/shared/errors'
 import { HumanActorRuntime } from './model'
 
 function createContext(side: Side): ActorContext {

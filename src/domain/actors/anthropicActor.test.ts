@@ -5,15 +5,15 @@ import {
   AnthropicTransportError,
   IllegalMoveError,
   TurnCancelledError,
-} from '../../shared/errors'
-import { AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS } from '../../actors/ai-actor'
+} from '@/shared/errors'
+import { AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS } from '@/actors/ai-actor'
 import { createChessEngine } from '../chess/createChessEngine'
 import type { ActorContext } from '../chess/types'
 import {
   AnthropicActor,
   AnthropicActorRuntime,
   DEFAULT_ANTHROPIC_MODEL,
-} from '../../actors/ai-actor/anthropic'
+} from '@/actors/ai-actor/anthropic'
 
 function createActorContext(): ActorContext {
   const engine = createChessEngine()

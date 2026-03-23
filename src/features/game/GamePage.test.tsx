@@ -1,18 +1,18 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_GOOGLE_MODEL } from '../../actors/ai-actor/google'
+import { DEFAULT_GOOGLE_MODEL } from '@/actors/ai-actor/google'
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
-} from '../../actors/ai-actor/open-ai'
-import { createDefaultSideConfig } from '../../actors/registry'
-import type { MatchConfig } from '../../actors/registry'
+} from '@/actors/ai-actor/open-ai'
+import { createDefaultSideConfig } from '@/actors/registry'
+import type { MatchConfig } from '@/actors/registry'
 import {
   clearStoredGameArchive,
   createStoredGame,
   setActiveGameId,
   type StoredGameActorControls,
-} from '../../shared/storage/gameSessionStorage'
+} from '@/shared/storage/gameSessionStorage'
 import styles from './GamePage.module.css'
 import { GamePage } from './GamePage'
 import { createGameModel } from './model'

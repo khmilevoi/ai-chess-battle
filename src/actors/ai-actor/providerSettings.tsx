@@ -1,4 +1,4 @@
-import { reatomMemo } from '../../shared/ui/reatomMemo'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 
 export type AiProviderModelOption = {
   value: string

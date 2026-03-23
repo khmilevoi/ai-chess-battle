@@ -7,18 +7,18 @@ import {
   type Atom,
   type Computed,
 } from '@reatom/core'
-import type { ActorMove, Side } from '../../domain/chess/types'
+import type { ActorMove, Side } from '@/domain/chess/types'
 import {
   ActorError,
   TurnCancelledError,
   type ActorRequestError,
-} from '../../shared/errors'
+} from '@/shared/errors'
 import {
   ReatomGateAbortError,
   ReatomGateConcurrentSpawnError,
   ReatomGateMissingPendingSendError,
   reatomGate,
-} from '../../shared/reatom/reatomGate'
+} from '@/shared/reatom/reatomGate'
 import type { AutonomousActor } from '../types'
 
 type BeforeRequestMoveArgs = Parameters<NonNullable<AutonomousActor['beforeRequestMove']>>[0]

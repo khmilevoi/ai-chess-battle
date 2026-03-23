@@ -3,7 +3,7 @@ import {
   activeGameIdAtom,
   setActiveGameId,
   storedGameSummariesAtom,
-} from '../../shared/storage/gameSessionStorage'
+} from '@/shared/storage/gameSessionStorage'
 
 type CreateGamesModelOptions = {
   goToGame: (gameId: string) => void

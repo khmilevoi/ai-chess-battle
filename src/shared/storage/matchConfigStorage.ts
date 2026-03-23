@@ -1,6 +1,6 @@
 import { atom, peek, withLocalStorage } from '@reatom/core'
-import { createDefaultMatchConfig } from '../../actors/registry'
-import type { MatchConfig } from '../../actors/registry'
+import { createDefaultMatchConfig } from '@/actors/registry'
+import type { MatchConfig } from '@/actors/registry'
 import { normalizeStoredMatchConfigValue } from './helpers'
 
 const STORAGE_KEY = 'ai-chess-battle.match-config'

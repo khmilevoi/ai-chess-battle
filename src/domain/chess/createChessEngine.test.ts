@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { IllegalMoveError } from '../../shared/errors'
+import { IllegalMoveError } from '@/shared/errors'
 import { createChessEngine } from './createChessEngine'
 import { toUciMove, type ActorMove } from './types'
 

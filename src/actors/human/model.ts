@@ -1,15 +1,15 @@
 import {
   ActorError,
   TurnCancelledError,
-} from '../../shared/errors'
-import type { ActorMove, Side } from '../../domain/chess/types'
+} from '@/shared/errors'
+import type { ActorMove, Side } from '@/domain/chess/types'
 import { named } from '@reatom/core'
 import {
   ReatomGateAbortError,
   ReatomGateConcurrentSpawnError,
   ReatomGateMissingPendingSendError,
   reatomGate,
-} from '../../shared/reatom/reatomGate'
+} from '@/shared/reatom/reatomGate'
 import type { InteractiveActor } from '../types'
 
 function toTurnCancelledError(

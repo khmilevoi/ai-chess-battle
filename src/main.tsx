@@ -1,4 +1,4 @@
-import "./app/setup"
+import "@/app/setup"
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { urlAtom } from '@reatom/core'

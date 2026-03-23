@@ -1,6 +1,6 @@
 import { peek } from '@reatom/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultSideConfig } from '../../actors/registry'
+import { createDefaultSideConfig } from '@/actors/registry'
 
 const GAMES_STORAGE_KEY = 'ai-chess-battle.games'
 const LEGACY_STORAGE_KEY = 'ai-chess-battle.game-session'

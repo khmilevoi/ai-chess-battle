@@ -8,7 +8,7 @@ import {
   type PieceSymbol,
   type Square as ChessSquare,
 } from 'chess.js'
-import { EngineError, IllegalMoveError } from '../../shared/errors'
+import { EngineError, IllegalMoveError } from '@/shared/errors'
 import {
   oppositeSide,
   toUciMove,

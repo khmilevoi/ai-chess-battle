@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_ANTHROPIC_MODEL } from '../../actors/ai-actor/anthropic'
-import { DEFAULT_GOOGLE_MODEL } from '../../actors/ai-actor/google'
-import { DEFAULT_OPENAI_REASONING_EFFORT } from '../../actors/ai-actor/open-ai'
-import { createDefaultSideConfig } from '../../actors/registry'
+import { DEFAULT_ANTHROPIC_MODEL } from '@/actors/ai-actor/anthropic'
+import { DEFAULT_GOOGLE_MODEL } from '@/actors/ai-actor/google'
+import { DEFAULT_OPENAI_REASONING_EFFORT } from '@/actors/ai-actor/open-ai'
+import { createDefaultSideConfig } from '@/actors/registry'
 import { clearStoredActorConfigMap, loadStoredActorConfig, saveStoredActorConfig } from './actorConfigStorage'
 
 const STORAGE_KEY = 'ai-chess-battle.actor-configs'

@@ -2,10 +2,10 @@ import type { ComponentType } from 'react'
 import {
   type MatchSideConfig,
   getRegisteredActor,
-} from '../../actors/registry'
-import type { ActorSettingsProps } from '../../actors/types'
-import type { Side } from '../../domain/chess/types'
-import { reatomMemo } from '../../shared/ui/reatomMemo'
+} from '@/actors/registry'
+import type { ActorSettingsProps } from '@/actors/types'
+import type { Side } from '@/domain/chess/types'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 
 export type ActorSettingsFieldsProps = {
   side: Side

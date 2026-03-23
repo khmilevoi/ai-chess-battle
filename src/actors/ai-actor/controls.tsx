@@ -1,7 +1,7 @@
 import type { AiActor } from './model'
 import type { ActorControlsProps } from '../types'
-import { Button } from '../../shared/ui/Button'
-import { reatomMemo } from '../../shared/ui/reatomMemo'
+import { Button } from '@/shared/ui/Button'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 import styles from './controls.module.css'
 
 type AiActorControlsProps = ActorControlsProps<AiActor> & {

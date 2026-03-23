@@ -1,5 +1,5 @@
-import { matchSideDraftSchema, validateSideConfig } from '../../actors/registry'
-import type { ActorConfigMap, MatchConfig, MatchSideConfig } from '../../actors/registry'
+import { matchSideDraftSchema, validateSideConfig } from '@/actors/registry'
+import type { ActorConfigMap, MatchConfig, MatchSideConfig } from '@/actors/registry'
 
 export type StoredActorConfigMap = Partial<ActorConfigMap>
 

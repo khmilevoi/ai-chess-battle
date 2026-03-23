@@ -7,8 +7,8 @@ import {
   AnthropicTransportError,
   IllegalMoveError,
   type ActorRequestError,
-} from '../../../shared/errors'
-import { type ActorMove } from '../../../domain/chess/types'
+} from '@/shared/errors'
+import { type ActorMove } from '@/domain/chess/types'
 import {
   AI_ACTOR_MAX_OUTPUT_TOKENS,
   aiActorMoveSchema,

@@ -1,6 +1,6 @@
 import type { ActorSettingsProps } from '../types'
 import type { HumanActorConfig } from './config.schema'
-import { reatomMemo } from '../../shared/ui/reatomMemo'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 
 export const HumanActorSettings = reatomMemo(({
   side,

@@ -1,4 +1,4 @@
-import type { PieceSnapshot } from '../../domain/chess/types'
+import type { PieceSnapshot } from '@/domain/chess/types'
 import styles from './PieceIcon.module.css'
 import { reatomMemo } from './reatomMemo'
 

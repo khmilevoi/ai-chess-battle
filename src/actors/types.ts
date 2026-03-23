@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import type { ZodType } from 'zod'
-import type { ActorConfigError, ActorError } from '../shared/errors'
-import type { ActorMove, GameActor, Side } from '../domain/chess/types'
+import type { ActorConfigError, ActorError } from '@/shared/errors'
+import type { ActorMove, GameActor, Side } from '@/domain/chess/types'
 
 export interface InteractiveActor extends GameActor {
   kind: 'interactive'

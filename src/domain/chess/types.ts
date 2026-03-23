@@ -1,7 +1,7 @@
 import type {
   ActorRequestError,
   EngineFailure,
-} from '../../shared/errors'
+} from '@/shared/errors'
 
 export type Side = 'white' | 'black'
 export type Square = string

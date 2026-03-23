@@ -6,8 +6,8 @@ import {
   OpenAiResponseError,
   OpenAiTransportError,
   type ActorRequestError,
-} from '../../../shared/errors'
-import { type ActorMove } from '../../../domain/chess/types'
+} from '@/shared/errors'
+import { type ActorMove } from '@/domain/chess/types'
 import {
   AiActor,
   type AiActorRequestArgs,

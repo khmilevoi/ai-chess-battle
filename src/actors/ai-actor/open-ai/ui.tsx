@@ -5,7 +5,7 @@ import {
   OPENAI_REASONING_OPTIONS,
   type OpenAiActorConfig,
 } from './config.schema'
-import { reatomMemo } from '../../../shared/ui/reatomMemo'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 
 const FieldErrorList = reatomMemo(({
   errors,

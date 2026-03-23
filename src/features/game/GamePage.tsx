@@ -5,9 +5,9 @@ import {
   type ComponentType,
   type CSSProperties,
 } from 'react'
-import { getRegisteredActor } from '../../actors/registry'
-import { Button } from '../../shared/ui/Button'
-import { reatomMemo } from '../../shared/ui/reatomMemo'
+import { getRegisteredActor } from '@/actors/registry'
+import { Button } from '@/shared/ui/Button'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 import { Board } from '../board/Board'
 import type { GameModel } from './model'
 import styles from './GamePage.module.css'

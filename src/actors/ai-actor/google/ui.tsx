@@ -1,7 +1,7 @@
 import type { ActorSettingsProps } from '../../types'
 import { AiProviderSettings } from '../providerSettings'
 import { GOOGLE_MODEL_OPTIONS, type GoogleActorConfig } from './config.schema'
-import { reatomMemo } from '../../../shared/ui/reatomMemo'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 
 export const GoogleActorSettings = reatomMemo(({
   value,

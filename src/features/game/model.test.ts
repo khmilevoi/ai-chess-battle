@@ -4,17 +4,17 @@ import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
   OpenAiActorRuntime,
-} from '../../actors/ai-actor/open-ai'
-import { createDefaultSideConfig } from '../../actors/registry'
-import type { MatchConfig } from '../../actors/registry'
-import { ActorError } from '../../shared/errors'
+} from '@/actors/ai-actor/open-ai'
+import { createDefaultSideConfig } from '@/actors/registry'
+import type { MatchConfig } from '@/actors/registry'
+import { ActorError } from '@/shared/errors'
 import {
   clearStoredGameArchive,
   createStoredGame,
   setActiveGameId,
   storedGameRecordAtom,
   type StoredGameActorControls,
-} from '../../shared/storage/gameSessionStorage'
+} from '@/shared/storage/gameSessionStorage'
 import { createGameModel } from './model'
 
 function createRequiredStoredGame(

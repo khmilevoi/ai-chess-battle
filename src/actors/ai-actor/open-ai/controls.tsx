@@ -1,7 +1,7 @@
 import type { ActorControlsProps } from '../../types'
 import { AiActorControls } from '../controls'
 import type { OpenAiActorRuntime } from './model'
-import { reatomMemo } from '../../../shared/ui/reatomMemo'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 
 export const OpenAiActorControls = reatomMemo(({
   side,

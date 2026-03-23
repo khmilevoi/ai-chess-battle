@@ -6,8 +6,8 @@ import {
   OpenAiHttpError,
   OpenAiTransportError,
   TurnCancelledError,
-} from '../../shared/errors'
-import { AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS } from '../../actors/ai-actor'
+} from '@/shared/errors'
+import { AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS } from '@/actors/ai-actor'
 import { createChessEngine } from '../chess/createChessEngine'
 import type { ActorContext } from '../chess/types'
 import {
@@ -15,7 +15,7 @@ import {
   DEFAULT_OPENAI_REASONING_EFFORT,
   OpenAiActor,
   OpenAiActorRuntime,
-} from '../../actors/ai-actor/open-ai'
+} from '@/actors/ai-actor/open-ai'
 
 function createActorContext(): ActorContext {
   const engine = createChessEngine()

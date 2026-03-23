@@ -4,7 +4,7 @@ import {
   isActorKey,
   type ActorConfigMap,
   type ActorKey,
-} from '../../actors/registry'
+} from '@/actors/registry'
 
 const STORAGE_KEY = 'ai-chess-battle.actor-configs'
 const STORAGE_VERSION = 'actor-configs@1'

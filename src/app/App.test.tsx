@@ -2,21 +2,21 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { peek, urlAtom } from '@reatom/core'
-import { DEFAULT_ANTHROPIC_MODEL } from '../actors/ai-actor/anthropic'
-import { DEFAULT_GOOGLE_MODEL } from '../actors/ai-actor/google'
+import { DEFAULT_ANTHROPIC_MODEL } from '@/actors/ai-actor/anthropic'
+import { DEFAULT_GOOGLE_MODEL } from '@/actors/ai-actor/google'
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
-} from '../actors/ai-actor/open-ai'
-import { createDefaultSideConfig } from '../actors/registry'
+} from '@/actors/ai-actor/open-ai'
+import { createDefaultSideConfig } from '@/actors/registry'
 import {
   clearStoredGameArchive,
   createStoredGame,
   setActiveGameId,
   storedGameRecordAtom,
-} from '../shared/storage/gameSessionStorage'
-import { storedMatchConfig } from '../shared/storage/matchConfigStorage'
-import { clearStoredActorConfigMap } from '../shared/storage/actorConfigStorage'
+} from '@/shared/storage/gameSessionStorage'
+import { storedMatchConfig } from '@/shared/storage/matchConfigStorage'
+import { clearStoredActorConfigMap } from '@/shared/storage/actorConfigStorage'
 import { gameRoute, setupRoute } from './routes'
 import { App } from './App'
 

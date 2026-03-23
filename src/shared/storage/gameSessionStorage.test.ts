@@ -1,6 +1,6 @@
 import { peek } from '@reatom/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultSideConfig } from '../../actors/registry'
+import { createDefaultSideConfig } from '@/actors/registry'
 import {
   activeGameIdAtom,
   clearStoredGameArchive,

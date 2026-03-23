@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultMatchConfig } from '../../actors/registry'
+import { createDefaultMatchConfig } from '@/actors/registry'
 import { loadStoredMatchConfig, storedMatchConfig } from './matchConfigStorage'
 
 const STORAGE_KEY = 'ai-chess-battle.match-config'

@@ -1,21 +1,21 @@
 import { peek } from '@reatom/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_OPENAI_REASONING_EFFORT } from '../../actors/ai-actor/open-ai'
-import { createDefaultSideConfig } from '../../actors/registry'
-import type { MatchConfig } from '../../actors/registry'
+import { DEFAULT_OPENAI_REASONING_EFFORT } from '@/actors/ai-actor/open-ai'
+import { createDefaultSideConfig } from '@/actors/registry'
+import type { MatchConfig } from '@/actors/registry'
 import {
   clearStoredActorConfigMap,
   loadStoredActorConfig,
-} from '../../shared/storage/actorConfigStorage'
+} from '@/shared/storage/actorConfigStorage'
 import {
   activeGameIdAtom,
   clearStoredGameArchive,
   storedGameRecordAtom,
-} from '../../shared/storage/gameSessionStorage'
+} from '@/shared/storage/gameSessionStorage'
 import {
   loadStoredMatchConfig,
   storedMatchConfig,
-} from '../../shared/storage/matchConfigStorage'
+} from '@/shared/storage/matchConfigStorage'
 import { createMatchSetupModel } from './model'
 
 function getLoadedConfig(): MatchConfig {

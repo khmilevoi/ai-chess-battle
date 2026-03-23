@@ -1,6 +1,6 @@
 import type { ActorControlsProps } from '../../types'
 import { AiActorControls } from '../controls'
-import { reatomMemo } from '../../../shared/ui/reatomMemo'
+import { reatomMemo } from '@/shared/ui/reatomMemo'
 import type { AnthropicActorRuntime } from './model'
 
 export const AnthropicActorControls = reatomMemo(({

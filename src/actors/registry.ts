@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { ActorConfigError } from '../shared/errors'
-import type { Side } from '../domain/chess/types'
+import { ActorConfigError } from '@/shared/errors'
+import type { Side } from '@/domain/chess/types'
 import { AnthropicActor } from './ai-actor/anthropic'
 import { GoogleActor } from './ai-actor/google'
 import { OpenAiActor } from './ai-actor/open-ai'

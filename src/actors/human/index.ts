@@ -1,4 +1,4 @@
-import { ActorConfigError } from '../../shared/errors'
+import { ActorConfigError } from '@/shared/errors'
 import { defineActor } from '../types'
 import {
   humanActorConfigSchema,

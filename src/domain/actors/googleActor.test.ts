@@ -5,15 +5,15 @@ import {
   GoogleGenAiTransportError,
   IllegalMoveError,
   TurnCancelledError,
-} from '../../shared/errors'
-import { AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS } from '../../actors/ai-actor'
+} from '@/shared/errors'
+import { AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS } from '@/actors/ai-actor'
 import { createChessEngine } from '../chess/createChessEngine'
 import type { ActorContext } from '../chess/types'
 import {
   DEFAULT_GOOGLE_MODEL,
   GoogleActor,
   GoogleActorRuntime,
-} from '../../actors/ai-actor/google'
+} from '@/actors/ai-actor/google'
 
 function createActorContext(): ActorContext {
   const engine = createChessEngine()

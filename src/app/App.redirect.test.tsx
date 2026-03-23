@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { urlAtom } from '@reatom/core'
-import { clearStoredActorConfigMap } from '../shared/storage/actorConfigStorage'
-import { clearStoredGameArchive } from '../shared/storage/gameSessionStorage'
-import { storedMatchConfig } from '../shared/storage/matchConfigStorage'
+import { clearStoredActorConfigMap } from '@/shared/storage/actorConfigStorage'
+import { clearStoredGameArchive } from '@/shared/storage/gameSessionStorage'
+import { storedMatchConfig } from '@/shared/storage/matchConfigStorage'
 import { setupRoute } from './routes'
 import { App } from './App'
 

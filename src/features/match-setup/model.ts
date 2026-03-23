@@ -1,5 +1,5 @@
 import { action, atom, computed } from '@reatom/core'
-import { ActorError } from '../../shared/errors'
+import { ActorError } from '@/shared/errors'
 import {
   createDefaultSideConfig,
   getRegisteredActor,
@@ -8,17 +8,17 @@ import {
   type ActorKey,
   type MatchConfig,
   type MatchSideConfig,
-} from '../../actors/registry'
-import type { Side } from '../../domain/chess/types'
-import { storedMatchConfig } from '../../shared/storage/matchConfigStorage'
+} from '@/actors/registry'
+import type { Side } from '@/domain/chess/types'
+import { storedMatchConfig } from '@/shared/storage/matchConfigStorage'
 import {
   readStoredActorConfig,
   saveStoredActorConfig,
-} from '../../shared/storage/actorConfigStorage'
+} from '@/shared/storage/actorConfigStorage'
 import {
   activeStoredGameSummaryAtom,
   createStoredGame,
-} from '../../shared/storage/gameSessionStorage'
+} from '@/shared/storage/gameSessionStorage'
 
 type CreateMatchSetupModelOptions = {
   name: string

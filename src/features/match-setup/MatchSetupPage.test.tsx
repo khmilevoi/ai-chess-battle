@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { createDefaultSideConfig } from '../../actors/registry'
+import { createDefaultSideConfig } from '@/actors/registry'
 import { MatchSetupPage } from './MatchSetupPage'
 import { createMatchSetupModel } from './model'
 

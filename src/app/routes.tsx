@@ -1,24 +1,24 @@
 import * as errore from 'errore'
 import { effect, peek, reatomRoute, urlAtom } from '@reatom/core'
 import { Children, Fragment, type ReactNode } from 'react'
-import { MatchSetupPage } from '../features/match-setup/MatchSetupPage'
-import { createMatchSetupModel } from '../features/match-setup/model'
-import { GamesPage } from '../features/games/GamesPage'
-import { createGamesModel } from '../features/games/model'
-import { GamePage } from '../features/game/GamePage'
-import { createGameModel } from '../features/game/model'
+import { MatchSetupPage } from '@/features/match-setup/MatchSetupPage'
+import { createMatchSetupModel } from '@/features/match-setup/model'
+import { GamesPage } from '@/features/games/GamesPage'
+import { createGamesModel } from '@/features/games/model'
+import { GamePage } from '@/features/game/GamePage'
+import { createGameModel } from '@/features/game/model'
 import {
   fallbackMatchConfig,
   readStoredMatchConfig,
-} from '../shared/storage/matchConfigStorage'
+} from '@/shared/storage/matchConfigStorage'
 import {
   activeGameIdAtom,
   activeStoredGameSummaryAtom,
   readStoredGameRecord,
   readStoredGameSummary,
   setActiveGameId,
-} from '../shared/storage/gameSessionStorage'
-import { Button } from '../shared/ui/Button'
+} from '@/shared/storage/gameSessionStorage'
+import { Button } from '@/shared/ui/Button'
 import styles from './App.module.css'
 
 function renderOutletChildren(outlet: () => ReactNode) {

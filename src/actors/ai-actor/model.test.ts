@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { ActorContext, ActorMove } from '../../domain/chess/types'
+import type { ActorContext, ActorMove } from '@/domain/chess/types'
 import {
   ActorError,
   IllegalMoveError,
   TurnCancelledError,
   type ActorRequestError,
-} from '../../shared/errors'
+} from '@/shared/errors'
 import {
   AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS,
   AiActor,
