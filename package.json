@@ -12,6 +12,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@google/genai": "^1.46.0",
     "@reatom/core": "^1000.15.2",
     "@reatom/react": "^1000.2.2",
     "chess.js": "^1.4.0",

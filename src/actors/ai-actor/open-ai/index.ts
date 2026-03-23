@@ -1,8 +1,11 @@
-import { action, atom } from '@reatom/core'
-import { z } from 'zod'
 import type { AiActorSharedControls } from '..'
 import { ActorConfigError } from '../../../shared/errors'
 import { defineActor } from '../../types'
+import {
+  aiActorStoredControlsSchema,
+  createAiActorControlsContract,
+  type AiActorStoredControls,
+} from '../runtimeControls'
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
@@ -12,38 +15,8 @@ import { OpenAiActorControls } from './controls'
 import { OpenAiActorRuntime } from './model'
 import { OpenAiActorSettings } from './ui'
 
-export const openAiActorStoredControlsSchema = z.object({
-  waitForConfirmation: z.boolean(),
-})
-
-export type OpenAiActorStoredControls = z.infer<
-  typeof openAiActorStoredControlsSchema
->
-
-function createOpenAiRuntimeControls({
-  name,
-  initialState,
-  persist,
-}: {
-  name: string
-  initialState: OpenAiActorStoredControls
-  persist: (nextState: OpenAiActorStoredControls) => void
-}): AiActorSharedControls {
-  const waitForConfirmation = atom(
-    initialState.waitForConfirmation,
-    `${name}.waitForConfirmation`,
-  )
-  const setWaitForConfirmationValue = action((next: boolean) => {
-    waitForConfirmation.set(next)
-    persist({ waitForConfirmation: next })
-    return null
-  }, `${name}.setWaitForConfirmationValue`)
-
-  return {
-    waitForConfirmation,
-    setWaitForConfirmationValue,
-  }
-}
+export const openAiActorStoredControlsSchema = aiActorStoredControlsSchema
+export type OpenAiActorStoredControls = AiActorStoredControls
 
 export const OpenAiActor = defineActor({
   key: 'openai',
@@ -57,14 +30,9 @@ export const OpenAiActor = defineActor({
   }),
   SettingsComponent: OpenAiActorSettings,
   ControlsComponent: OpenAiActorControls,
-  controlsContract: {
-    storageSchema: openAiActorStoredControlsSchema,
-    createDefaultStoredState: (): OpenAiActorStoredControls => ({
-      waitForConfirmation: false,
-    }),
-    getControlGroupKey: (_config) => 'openai',
-    createRuntimeControls: createOpenAiRuntimeControls,
-  },
+  controlsContract: createAiActorControlsContract({
+    controlGroupKey: 'openai',
+  }),
   create(config, options) {
     const validation = openAiActorConfigSchema.safeParse(config)
 

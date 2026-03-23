@@ -1,21 +1,21 @@
 import type { ActorControlsProps } from '../../types'
 import { AiActorControls } from '../controls'
-import type { OpenAiActorRuntime } from './model'
 import { reatomMemo } from '../../../shared/ui/reatomMemo'
+import type { AnthropicActorRuntime } from './model'
 
-export const OpenAiActorControls = reatomMemo(({
+export const AnthropicActorControls = reatomMemo(({
   side,
   sides,
   activeSide,
   actor,
-}: ActorControlsProps<OpenAiActorRuntime>) => {
+}: ActorControlsProps<AnthropicActorRuntime>) => {
   return (
     <AiActorControls
       side={side}
       sides={sides}
       activeSide={activeSide}
       actor={actor}
-      providerLabel="OpenAI"
+      providerLabel="Anthropic"
     />
   )
-}, 'OpenAiActorControls')
+}, 'AnthropicActorControls')

@@ -1,76 +1,18 @@
+import type { ComponentType } from 'react'
 import {
-  type ActorKey,
   type MatchSideConfig,
   getRegisteredActor,
 } from '../../actors/registry'
+import type { ActorSettingsProps } from '../../actors/types'
 import type { Side } from '../../domain/chess/types'
 import { reatomMemo } from '../../shared/ui/reatomMemo'
 
-export type ActorSettingsFieldsProps<K extends ActorKey = ActorKey> = {
+export type ActorSettingsFieldsProps = {
   side: Side
-  sideConfig: MatchSideConfig<K>
-  onChange: (next: MatchSideConfig<K>) => void
+  sideConfig: MatchSideConfig
+  onChange: (next: MatchSideConfig) => void
   errors: Record<string, Array<string>>
 }
-
-function assertNever(value: never): never {
-  throw new Error(`Unhandled actor settings variant: ${String(value)}`)
-}
-
-type BranchActorSettingsProps<K extends ActorKey> = {
-  side: Side
-  sideConfig: MatchSideConfig<K>
-  onChange: (next: MatchSideConfig<K>) => void
-  errors: Record<string, Array<string>>
-}
-
-const HumanActorSettingsFields = reatomMemo(({
-  side,
-  sideConfig,
-  onChange,
-  errors,
-}: BranchActorSettingsProps<'human'>) => {
-  const descriptor = getRegisteredActor('human')
-  const SettingsComponent = descriptor.SettingsComponent
-
-  return (
-    <SettingsComponent
-      side={side}
-      value={sideConfig.actorConfig}
-      onChange={(actorConfig) =>
-        onChange({
-          actorKey: descriptor.key,
-          actorConfig,
-        })
-      }
-      errors={errors}
-    />
-  )
-}, 'HumanActorSettingsFields')
-
-const OpenAiActorSettingsFields = reatomMemo(({
-  side,
-  sideConfig,
-  onChange,
-  errors,
-}: BranchActorSettingsProps<'openai'>) => {
-  const descriptor = getRegisteredActor('openai')
-  const SettingsComponent = descriptor.SettingsComponent
-
-  return (
-    <SettingsComponent
-      side={side}
-      value={sideConfig.actorConfig}
-      onChange={(actorConfig) =>
-        onChange({
-          actorKey: descriptor.key,
-          actorConfig,
-        })
-      }
-      errors={errors}
-    />
-  )
-}, 'OpenAiActorSettingsFields')
 
 export const ActorSettingsFields = reatomMemo(({
   side,
@@ -78,28 +20,22 @@ export const ActorSettingsFields = reatomMemo(({
   onChange,
   errors,
 }: ActorSettingsFieldsProps) => {
-  switch (sideConfig.actorKey) {
-    case 'human':
-      return (
-        <HumanActorSettingsFields
-          side={side}
-          sideConfig={sideConfig}
-          onChange={onChange}
-          errors={errors}
-        />
-      )
+  const descriptor = getRegisteredActor(sideConfig.actorKey)
+  const SettingsComponent = descriptor.SettingsComponent as ComponentType<
+    ActorSettingsProps<unknown>
+  >
 
-    case 'openai':
-      return (
-        <OpenAiActorSettingsFields
-          side={side}
-          sideConfig={sideConfig}
-          onChange={onChange}
-          errors={errors}
-        />
-      )
-
-    default:
-      return assertNever(sideConfig)
-  }
+  return (
+    <SettingsComponent
+      side={side}
+      value={sideConfig.actorConfig}
+      onChange={(actorConfig) =>
+        onChange({
+          actorKey: descriptor.key,
+          actorConfig,
+        } as MatchSideConfig)
+      }
+      errors={errors}
+    />
+  )
 }, 'ActorSettingsFields')

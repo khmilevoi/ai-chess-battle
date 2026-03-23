@@ -2,6 +2,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { peek, urlAtom } from '@reatom/core'
+import { DEFAULT_ANTHROPIC_MODEL } from '../actors/ai-actor/anthropic'
+import { DEFAULT_GOOGLE_MODEL } from '../actors/ai-actor/google'
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
@@ -41,6 +43,26 @@ function createOpenAiSide() {
       apiKey: 'sk-test',
       model: DEFAULT_OPENAI_MODEL,
       reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+    },
+  }
+}
+
+function createAnthropicSide() {
+  return {
+    actorKey: 'anthropic' as const,
+    actorConfig: {
+      apiKey: 'anthropic-test',
+      model: DEFAULT_ANTHROPIC_MODEL,
+    },
+  }
+}
+
+function createGoogleSide() {
+  return {
+    actorKey: 'google' as const,
+    actorConfig: {
+      apiKey: 'google-test',
+      model: DEFAULT_GOOGLE_MODEL,
     },
   }
 }
@@ -183,6 +205,40 @@ describe('App integration', () => {
     await expectLiveMatchLoaded(['e2e4', 'e7e5'])
   })
 
+  it('restores a saved Anthropic session on cold /game/:gameId load', async () => {
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createAnthropicSide(),
+      },
+    })
+    setActiveGameId(game.id)
+    window.history.replaceState({}, '', `/game/${game.id}`)
+    syncCurrentUrl()
+
+    render(<App />)
+
+    await expectLiveMatchLoaded()
+    expect(screen.getByText('Anthropic Actor')).toBeInTheDocument()
+  })
+
+  it('restores a saved Gemini session on cold /game/:gameId load', async () => {
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createGoogleSide(),
+      },
+    })
+    setActiveGameId(game.id)
+    window.history.replaceState({}, '', `/game/${game.id}`)
+    syncCurrentUrl()
+
+    render(<App />)
+
+    await expectLiveMatchLoaded()
+    expect(screen.getByText('Gemini Actor')).toBeInTheDocument()
+  })
+
   it('keeps the same game-route model while persisting confirmation controls on the live page', async () => {
     const user = userEvent.setup()
     const pendingResponses: Array<(response: Response) => void> = []
@@ -252,6 +308,43 @@ describe('App integration', () => {
     await expectLiveMatchLoaded(['e2e4'])
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(gameRoute.loader.data()).toBe(initialModel)
+  })
+
+  it('hydrates persisted Gemini confirmation controls on cold route load', async () => {
+    const user = userEvent.setup()
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createGoogleSide(),
+      },
+      actorControls: {
+        google: {
+          waitForConfirmation: true,
+        },
+      },
+    })
+    setActiveGameId(game.id)
+    window.history.replaceState({}, '', `/game/${game.id}`)
+    syncCurrentUrl()
+
+    render(<App />)
+
+    await expectLiveMatchLoaded()
+    const checkbox = screen.getByRole('checkbox', {
+      name: /Wait for confirmation before sending the Gemini request/i,
+    })
+
+    expect(checkbox).toBeChecked()
+
+    await user.click(checkbox)
+
+    await waitFor(() => {
+      expect(peek(storedGameRecordAtom(game.id))?.actorControls).toEqual({
+        google: {
+          waitForConfirmation: false,
+        },
+      })
+    })
   })
 
   it('keeps the game route responsive across repeated setup, active-game, and archive transitions', async () => {

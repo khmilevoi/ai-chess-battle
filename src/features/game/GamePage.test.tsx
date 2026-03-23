@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_GOOGLE_MODEL } from '../../actors/ai-actor/google'
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
@@ -49,6 +50,16 @@ function createOpenAiSide() {
       apiKey: 'sk-test',
       model: DEFAULT_OPENAI_MODEL,
       reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+    },
+  }
+}
+
+function createGoogleSide() {
+  return {
+    actorKey: 'google' as const,
+    actorConfig: {
+      apiKey: 'google-test',
+      model: DEFAULT_GOOGLE_MODEL,
     },
   }
 }
@@ -134,6 +145,26 @@ describe('GamePage', () => {
     expect(screen.getByText('White & Black request controls')).toBeInTheDocument()
     expect(screen.getByText('White is waiting for your approval.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Send OpenAI request' })).toBeEnabled()
+  })
+
+  it('renders a shared Gemini control card when both sides use the same actor type', async () => {
+    const model = await createStartedModel({
+      config: {
+        white: createGoogleSide(),
+        black: createGoogleSide(),
+      },
+      actorControls: {
+        google: {
+          waitForConfirmation: true,
+        },
+      },
+    })
+
+    render(<GamePage model={model} />)
+
+    expect(screen.getByText('White & Black request controls')).toBeInTheDocument()
+    expect(screen.getByText('White is waiting for your approval.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send Gemini request' })).toBeEnabled()
   })
 
   it('shows an unavailable state for actor controls while reviewing history', async () => {
