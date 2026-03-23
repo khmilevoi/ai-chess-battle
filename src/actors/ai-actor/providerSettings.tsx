@@ -6,6 +6,11 @@ export type AiProviderModelOption = {
   hint?: string
 }
 
+type LabeledOption = {
+  value: string
+  label: string
+}
+
 type AiProviderSettingsValue = {
   apiKey: string
   model: string
@@ -82,3 +87,10 @@ export const AiProviderSettings = reatomMemo(({
     </div>
   )
 }, 'AiProviderSettings')
+
+export function getOptionLabel<Option extends LabeledOption>(
+  options: ReadonlyArray<Option>,
+  value: string,
+): string {
+  return options.find((option) => option.value === value)?.label ?? value
+}

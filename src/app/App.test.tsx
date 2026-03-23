@@ -146,7 +146,7 @@ describe('App integration', () => {
     await user.click(screen.getByRole('button', { name: 'Active game' }))
 
     await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
-  })
+  }, 15000)
 
   it('opens the saved games page and navigates to a selected game', async () => {
     const user = userEvent.setup()
@@ -165,7 +165,13 @@ describe('App integration', () => {
     await user.click(screen.getByRole('button', { name: 'Games' }))
 
     await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
-    await user.click(screen.getByRole('button', { name: 'Open game' }))
+    const openGameButtons = await screen.findAllByRole(
+      'button',
+      { name: 'Open game' },
+      { timeout: 5000 },
+    )
+
+    await user.click(openGameButtons[0]!)
 
     await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
     expect(window.location.pathname).toBe(`/game/${savedGame.id}`)
@@ -219,7 +225,7 @@ describe('App integration', () => {
     render(<App />)
 
     await expectLiveMatchLoaded()
-    expect(screen.getByText('Anthropic Actor')).toBeInTheDocument()
+    expect(screen.getAllByText('Anthropic Actor').length).toBeGreaterThan(0)
   })
 
   it('restores a saved Gemini session on cold /game/:gameId load', async () => {
@@ -236,7 +242,7 @@ describe('App integration', () => {
     render(<App />)
 
     await expectLiveMatchLoaded()
-    expect(screen.getByText('Gemini Actor')).toBeInTheDocument()
+    expect(screen.getAllByText('Gemini Actor').length).toBeGreaterThan(0)
   })
 
   it('keeps the same game-route model while persisting confirmation controls on the live page', async () => {
@@ -366,7 +372,13 @@ describe('App integration', () => {
       await user.click(screen.getByRole('button', { name: 'Games' }))
       await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
 
-      await user.click(screen.getByRole('button', { name: 'Open game' }))
+      const openGameButtons = await screen.findAllByRole(
+        'button',
+        { name: 'Open game' },
+        { timeout: 5000 },
+      )
+
+      await user.click(openGameButtons[0]!)
       await expectLiveMatchLoaded()
     }
   }, 15000)
@@ -398,7 +410,13 @@ describe('App integration', () => {
       await user.click(screen.getByRole('button', { name: 'Games' }))
       await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
 
-      await user.click(screen.getByRole('button', { name: 'Open game' }))
+      const openGameButtons = await screen.findAllByRole(
+        'button',
+        { name: 'Open game' },
+        { timeout: 5000 },
+      )
+
+      await user.click(openGameButtons[0]!)
     }
 
     await expectLiveMatchLoaded(['e2e4', 'e7e5'])

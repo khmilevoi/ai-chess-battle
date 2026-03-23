@@ -8,7 +8,7 @@ import {
 import { anthropicActorConfigSchema, DEFAULT_ANTHROPIC_MODEL } from './config.schema'
 import { AnthropicActorControls } from './controls'
 import { AnthropicActorRuntime } from './model'
-import { AnthropicActorSettings } from './ui'
+import { AnthropicActorMatchInfo, AnthropicActorSettings } from './ui'
 import type { AiActorSharedControls } from '..'
 
 export const anthropicActorStoredControlsSchema = aiActorStoredControlsSchema
@@ -24,6 +24,7 @@ export const AnthropicActor = defineActor({
     model: DEFAULT_ANTHROPIC_MODEL,
   }),
   SettingsComponent: AnthropicActorSettings,
+  MatchInfoComponent: AnthropicActorMatchInfo,
   ControlsComponent: AnthropicActorControls,
   controlsContract: createAiActorControlsContract({
     controlGroupKey: 'anthropic',

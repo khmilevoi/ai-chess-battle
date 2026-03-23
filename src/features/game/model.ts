@@ -67,6 +67,14 @@ type ActorPanelEntry = {
   isActive: boolean
 }
 
+type MatchInfoEntry = {
+  side: BoardSnapshot['turn']
+  actorKey: MatchConfig[BoardSnapshot['turn']]['actorKey']
+  actorConfig: MatchConfig[BoardSnapshot['turn']]['actorConfig']
+  displayName: string
+  summary: string
+}
+
 type RuntimeControlsByGroupKey = Record<string, unknown>
 
 type HistoryMove = {
@@ -441,6 +449,26 @@ export function createGameModel({
       } satisfies ActorPanelEntry
     })
   }, `${name}.actorPanels`)
+  const matchInfoEntries = computed(() => {
+    const config = storedGame()?.config
+
+    if (!config) {
+      return [] as Array<MatchInfoEntry>
+    }
+
+    return (['white', 'black'] as const).map((side) => {
+      const sideConfig = config[side]
+      const descriptor = getRegisteredActor(sideConfig.actorKey)
+
+      return {
+        side,
+        actorKey: sideConfig.actorKey,
+        actorConfig: sideConfig.actorConfig,
+        displayName: descriptor.displayName,
+        summary: descriptor.summary,
+      } satisfies MatchInfoEntry
+    })
+  }, `${name}.matchInfoEntries`)
   const activeHumanActor = computed(() => {
     const currentActorState = activeActorState()
 
@@ -1111,6 +1139,7 @@ export function createGameModel({
     selectedLegalMoves,
     movableSquares,
     actorPanels,
+    matchInfoEntries,
     activeActorControls,
     activeHumanActor,
     statusText,

@@ -44,7 +44,7 @@ export function createAiActorControlsContract<Config>({
     createDefaultStoredState: (): AiActorStoredControls => ({
       waitForConfirmation: false,
     }),
-    getControlGroupKey: (_config: Config) => controlGroupKey,
+    getControlGroupKey: () => controlGroupKey,
     createRuntimeControls: createAiActorRuntimeControls,
   }
 }

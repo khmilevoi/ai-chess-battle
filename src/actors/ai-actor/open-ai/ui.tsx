@@ -1,5 +1,5 @@
-import type { ActorSettingsProps } from '../../types'
-import { AiProviderSettings } from '../providerSettings'
+import type { ActorMatchInfoProps, ActorSettingsProps } from '../../types'
+import { AiProviderSettings, getOptionLabel } from '../providerSettings'
 import {
   OPENAI_MODEL_OPTIONS,
   OPENAI_REASONING_OPTIONS,
@@ -66,3 +66,20 @@ export const OpenAiActorSettings = reatomMemo(({
     </div>
   )
 }, 'OpenAiActorSettings')
+
+export const OpenAiActorMatchInfo = reatomMemo(({
+  value,
+}: ActorMatchInfoProps<OpenAiActorConfig>) => {
+  return (
+    <dl>
+      <div>
+        <dt>Model</dt>
+        <dd>{getOptionLabel(OPENAI_MODEL_OPTIONS, value.model)}</dd>
+      </div>
+      <div>
+        <dt>Reasoning effort</dt>
+        <dd>{getOptionLabel(OPENAI_REASONING_OPTIONS, value.reasoningEffort)}</dd>
+      </div>
+    </dl>
+  )
+}, 'OpenAiActorMatchInfo')

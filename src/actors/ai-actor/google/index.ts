@@ -8,7 +8,7 @@ import {
 import { DEFAULT_GOOGLE_MODEL, googleActorConfigSchema } from './config.schema'
 import { GoogleActorControls } from './controls'
 import { GoogleActorRuntime } from './model'
-import { GoogleActorSettings } from './ui'
+import { GoogleActorMatchInfo, GoogleActorSettings } from './ui'
 import type { AiActorSharedControls } from '..'
 
 export const googleActorStoredControlsSchema = aiActorStoredControlsSchema
@@ -24,6 +24,7 @@ export const GoogleActor = defineActor({
     model: DEFAULT_GOOGLE_MODEL,
   }),
   SettingsComponent: GoogleActorSettings,
+  MatchInfoComponent: GoogleActorMatchInfo,
   ControlsComponent: GoogleActorControls,
   controlsContract: createAiActorControlsContract({
     controlGroupKey: 'google',

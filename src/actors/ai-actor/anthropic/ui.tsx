@@ -1,5 +1,5 @@
-import type { ActorSettingsProps } from '../../types'
-import { AiProviderSettings } from '../providerSettings'
+import type { ActorMatchInfoProps, ActorSettingsProps } from '../../types'
+import { AiProviderSettings, getOptionLabel } from '../providerSettings'
 import {
   ANTHROPIC_MODEL_OPTIONS,
   type AnthropicActorConfig,
@@ -26,3 +26,16 @@ export const AnthropicActorSettings = reatomMemo(({
     />
   )
 }, 'AnthropicActorSettings')
+
+export const AnthropicActorMatchInfo = reatomMemo(({
+  value,
+}: ActorMatchInfoProps<AnthropicActorConfig>) => {
+  return (
+    <dl>
+      <div>
+        <dt>Model</dt>
+        <dd>{getOptionLabel(ANTHROPIC_MODEL_OPTIONS, value.model)}</dd>
+      </div>
+    </dl>
+  )
+}, 'AnthropicActorMatchInfo')

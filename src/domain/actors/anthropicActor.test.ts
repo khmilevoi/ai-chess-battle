@@ -1,4 +1,4 @@
-import Anthropic, { APIError } from '@anthropic-ai/sdk'
+import Anthropic from '@anthropic-ai/sdk'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AnthropicHttpError,
@@ -43,6 +43,79 @@ function createParsedResponse(payload: unknown) {
   }
 }
 
+function createAnthropicMessageResponse(text: string) {
+  return new Response(
+    JSON.stringify({
+      id: 'msg_test',
+      type: 'message',
+      role: 'assistant',
+      model: DEFAULT_ANTHROPIC_MODEL,
+      content: [
+        {
+          type: 'text',
+          text,
+        },
+      ],
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      container: null,
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_creation_input_tokens: null,
+        cache_read_input_tokens: null,
+        server_tool_use: null,
+        service_tier: null,
+      },
+    }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'request-id': 'req_success',
+      },
+    },
+  )
+}
+
+function createAnthropicErrorResponse({
+  status,
+  errorType,
+  message,
+  requestId,
+  retryAfterMs,
+}: {
+  status: number
+  errorType: string
+  message: string
+  requestId: string
+  retryAfterMs?: number
+}) {
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+    'request-id': requestId,
+  })
+
+  if (retryAfterMs !== undefined) {
+    headers.set('retry-after-ms', String(retryAfterMs))
+  }
+
+  return new Response(
+    JSON.stringify({
+      type: 'error',
+      error: {
+        type: errorType,
+        message,
+      },
+      request_id: requestId,
+    }),
+    {
+      status,
+      headers,
+    },
+  )
+}
+
 async function flushMicrotask() {
   await Promise.resolve()
 }
@@ -55,6 +128,7 @@ describe('AnthropicActor', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('returns transport errors as values', async () => {
@@ -73,6 +147,18 @@ describe('AnthropicActor', () => {
     })
 
     expect(result).toBeInstanceOf(AnthropicTransportError)
+  })
+
+  it('configures the sdk client with the explicit retry budget', () => {
+    const actor = AnthropicActor.create(config)
+
+    if (!(actor instanceof AnthropicActorRuntime)) {
+      throw actor
+    }
+
+    const client = Reflect.get(actor, 'client') as Anthropic
+
+    expect(client.maxRetries).toBe(2)
   })
 
   it('does not wait for confirmation by default', async () => {
@@ -188,6 +274,45 @@ describe('AnthropicActor', () => {
     expect(result.uci).toBe('e2e4')
   })
 
+  it('retries overloaded responses through the sdk and returns the legal move', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createAnthropicErrorResponse({
+          status: 529,
+          errorType: 'overloaded_error',
+          message: 'Overloaded',
+          requestId: 'req_retry_1',
+          retryAfterMs: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createAnthropicMessageResponse(
+          '{"from":"e2","to":"e4","promotion":"null"}',
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const actor = AnthropicActor.create(config)
+
+    if (!(actor instanceof AnthropicActorRuntime)) {
+      throw actor
+    }
+
+    const result = await actor.requestMove({
+      context: createActorContext(),
+      signal: new AbortController().signal,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result).not.toBeInstanceOf(Error)
+    if (result instanceof Error) {
+      throw result
+    }
+
+    expect(result.uci).toBe('e2e4')
+  })
+
   it('retries until the global attempt limit and then returns the invalid move error', async () => {
     const actor = AnthropicActor.create(config)
 
@@ -290,28 +415,28 @@ describe('AnthropicActor', () => {
   })
 
   it('returns http errors without retrying', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      createAnthropicErrorResponse({
+        status: 401,
+        errorType: 'authentication_error',
+        message: 'Unauthorized',
+        requestId: 'req_401',
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
     const actor = AnthropicActor.create(config)
 
     if (!(actor instanceof AnthropicActorRuntime)) {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as Anthropic
-    const parseMock = vi.spyOn(client.messages, 'parse').mockRejectedValue(
-      new APIError(
-        401,
-        { type: 'error' } as Record<string, unknown>,
-        'Unauthorized',
-        new Headers(),
-      ),
-    )
-
     const result = await actor.requestMove({
       context: createActorContext(),
       signal: new AbortController().signal,
     })
 
-    expect(parseMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(result).toBeInstanceOf(AnthropicHttpError)
   })
 

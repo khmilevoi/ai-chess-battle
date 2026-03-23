@@ -4,7 +4,7 @@ import {
   humanActorConfigSchema,
 } from './config.schema'
 import { HumanActorRuntime } from './model'
-import { HumanActorSettings } from './ui'
+import { HumanActorMatchInfo, HumanActorSettings } from './ui'
 
 export const HumanActor = defineActor({
   key: 'human',
@@ -13,6 +13,7 @@ export const HumanActor = defineActor({
   configSchema: humanActorConfigSchema,
   createDefaultConfig: () => ({}),
   SettingsComponent: HumanActorSettings,
+  MatchInfoComponent: HumanActorMatchInfo,
   create(config) {
     const validation = humanActorConfigSchema.safeParse(config)
 

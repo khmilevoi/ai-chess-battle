@@ -27,6 +27,7 @@ import {
 import type {
   ActorConfigOf,
   ActorDescriptorByKey,
+  ActorMatchInfoPropsOf,
   ActorModelOf,
   MatchSideConfigFromRegistry,
 } from './types'
@@ -44,14 +45,20 @@ describe('actor registry', () => {
       GoogleActor,
     ])
     expect(actorRegistry.human.SettingsComponent).toBe(HumanActor.SettingsComponent)
+    expect(actorRegistry.human.MatchInfoComponent).toBe(HumanActor.MatchInfoComponent)
     expect(actorRegistry.human.ControlsComponent).toBeUndefined()
     expect(actorRegistry.human.controlsContract).toBeUndefined()
+    expect(actorRegistry.openai.MatchInfoComponent).toBe(OpenAiActor.MatchInfoComponent)
     expect(actorRegistry.openai.ControlsComponent).toBe(OpenAiActor.ControlsComponent)
     expect(actorRegistry.openai.controlsContract).toBeDefined()
+    expect(actorRegistry.anthropic.MatchInfoComponent).toBe(
+      AnthropicActor.MatchInfoComponent,
+    )
     expect(actorRegistry.anthropic.ControlsComponent).toBe(
       AnthropicActor.ControlsComponent,
     )
     expect(actorRegistry.anthropic.controlsContract).toBeDefined()
+    expect(actorRegistry.google.MatchInfoComponent).toBe(GoogleActor.MatchInfoComponent)
     expect(actorRegistry.google.ControlsComponent).toBe(
       GoogleActor.ControlsComponent,
     )
@@ -123,6 +130,10 @@ describe('actor registry', () => {
     expectTypeOf<
       MatchSideConfigFromRegistry<ActorRegistry, 'human'>['actorConfig']
     >().toEqualTypeOf<ReturnType<typeof HumanActor.createDefaultConfig>>()
+    expectTypeOf<ActorMatchInfoPropsOf<typeof OpenAiActor>>().toEqualTypeOf<{
+      side: 'white' | 'black'
+      value: ReturnType<typeof OpenAiActor.createDefaultConfig>
+    }>()
   })
 
   it('creates OpenAI runtimes through descriptor contracts', () => {

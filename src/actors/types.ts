@@ -21,6 +21,11 @@ export type ActorSettingsProps<Config> = {
   errors: Record<string, Array<string>>
 }
 
+export type ActorMatchInfoProps<Config> = {
+  side: Side
+  value: Config
+}
+
 export type ActorControlsProps<Model extends AnyActorModel = AnyActorModel> = {
   side: Side
   sides: Array<Side>
@@ -54,6 +59,9 @@ export interface ActorDescriptor<
   SettingsComponent extends ComponentType<ActorSettingsProps<Config>> = ComponentType<
     ActorSettingsProps<Config>
   >,
+  MatchInfoComponent extends ComponentType<ActorMatchInfoProps<Config>> = ComponentType<
+    ActorMatchInfoProps<Config>
+  >,
 > {
   key: Key
   displayName: string
@@ -65,7 +73,9 @@ export interface ActorDescriptor<
     options?: ActorCreateOptions,
   ) => Model | ActorConfigError
   SettingsComponent: SettingsComponent
+  MatchInfoComponent: MatchInfoComponent
   ControlsComponent?: ComponentType<ActorControlsProps<Model>>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   controlsContract?: ActorControlsContract<Config, any, any>
 }
 
@@ -74,7 +84,8 @@ export function defineActor<
   Model extends AnyActorModel,
   Config,
   SettingsComponent extends ComponentType<ActorSettingsProps<Config>>,
->(descriptor: ActorDescriptor<Key, Model, Config, SettingsComponent>) {
+  MatchInfoComponent extends ComponentType<ActorMatchInfoProps<Config>>,
+>(descriptor: ActorDescriptor<Key, Model, Config, SettingsComponent, MatchInfoComponent>) {
   return descriptor
 }
 
@@ -85,24 +96,28 @@ type ActorDescriptorParts<Descriptor> =
     infer Key,
     infer Model,
     infer Config,
-    infer SettingsComponent
+    infer SettingsComponent,
+    infer MatchInfoComponent
   >
     ? {
         key: Key
         model: Model
         config: Config
         SettingsComponent: SettingsComponent
+        MatchInfoComponent: MatchInfoComponent
         ControlsComponent: ActorDescriptor<
           Key,
           Model & AnyActorModel,
           Config,
-          SettingsComponent & ComponentType<ActorSettingsProps<Config>>
+          SettingsComponent & ComponentType<ActorSettingsProps<Config>>,
+          MatchInfoComponent & ComponentType<ActorMatchInfoProps<Config>>
         >['ControlsComponent']
         controlsContract: ActorDescriptor<
           Key,
           Model & AnyActorModel,
           Config,
-          SettingsComponent & ComponentType<ActorSettingsProps<Config>>
+          SettingsComponent & ComponentType<ActorSettingsProps<Config>>,
+          MatchInfoComponent & ComponentType<ActorMatchInfoProps<Config>>
         >['controlsContract']
       }
     : never
@@ -141,6 +156,16 @@ export type ActorUIOf<Descriptor> =
 
 export type ActorSettingsPropsOf<Descriptor> =
   ActorConfigOf<Descriptor> extends infer Config ? ActorSettingsProps<Config> : never
+
+export type ActorMatchInfoUIOf<Descriptor> =
+  ActorDescriptorParts<Descriptor> extends {
+    MatchInfoComponent: infer MatchInfoComponent
+  }
+    ? MatchInfoComponent
+    : never
+
+export type ActorMatchInfoPropsOf<Descriptor> =
+  ActorConfigOf<Descriptor> extends infer Config ? ActorMatchInfoProps<Config> : never
 
 export type ActorControlsUIOf<Descriptor> =
   ActorDescriptorParts<Descriptor> extends {

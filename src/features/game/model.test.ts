@@ -456,6 +456,56 @@ describe('createGameModel', () => {
     ])
   })
 
+  it('derives separate match info entries for white and black even when the actor type matches', async () => {
+    const game = createSavedGame({
+      config: {
+        white: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-white',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+        black: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-black',
+            model: 'custom-openai-model',
+            reasoningEffort: 'medium',
+          },
+        },
+      },
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+    expect(model.matchInfoEntries()).toEqual([
+      expect.objectContaining({
+        side: 'white',
+        actorKey: 'openai',
+        actorConfig: expect.objectContaining({
+          apiKey: 'sk-white',
+          model: DEFAULT_OPENAI_MODEL,
+        }),
+      }),
+      expect.objectContaining({
+        side: 'black',
+        actorKey: 'openai',
+        actorConfig: expect.objectContaining({
+          apiKey: 'sk-black',
+          model: 'custom-openai-model',
+          reasoningEffort: 'medium',
+        }),
+      }),
+    ])
+  })
+
   it('shares wait-for-confirmation state across identical OpenAI actors and persists it', async () => {
     let resolveFirstMove: ((response: Response) => void) | null = null
     const fetchMock = vi.fn()

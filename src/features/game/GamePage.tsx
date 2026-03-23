@@ -1,11 +1,13 @@
 import {
   useEffect,
   useRef,
+  useId,
   useState,
   type ComponentType,
   type CSSProperties,
 } from 'react'
 import { getRegisteredActor } from '@/actors/registry'
+import type { ActorMatchInfoProps } from '@/actors/types'
 import { Button } from '@/shared/ui/Button'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
 import { Board } from '../board/Board'
@@ -18,6 +20,7 @@ const sideLabels = {
 } as const
 
 type ActorPanelEntry = ReturnType<GameModel['actorPanels']>[number]
+type MatchInfoEntry = ReturnType<GameModel['matchInfoEntries']>[number]
 
 function getActorControlsNotice({
   isAtLatestMove,
@@ -133,6 +136,12 @@ function resolveControlsComponent(
     | undefined
 }
 
+function resolveMatchInfoComponent(matchInfoEntry: MatchInfoEntry) {
+  const descriptor = getRegisteredActor(matchInfoEntry.actorKey)
+
+  return descriptor.MatchInfoComponent as ComponentType<ActorMatchInfoProps<unknown>>
+}
+
 function renderActorControlsPanel({
   actorPanels,
   controlsNotice,
@@ -234,6 +243,78 @@ function renderActorControlsPanel({
   )
 }
 
+function renderMatchInfoDisclosure({
+  matchInfoEntries,
+  open,
+  contentId,
+  onToggle,
+}: {
+  matchInfoEntries: Array<MatchInfoEntry>
+  open: boolean
+  contentId: string
+  onToggle: () => void
+}) {
+  return (
+    <div className={styles.matchInfoDisclosure}>
+      <button
+        type="button"
+        className={styles.matchInfoToggle}
+        aria-expanded={open}
+        aria-controls={contentId}
+        onClick={onToggle}
+      >
+        <span className={styles.matchInfoToggleCopy}>
+          <span className={styles.matchInfoToggleLabel}>Match info</span>
+          <span className={styles.matchInfoToggleHint}>
+            Saved actor setup for white and black.
+          </span>
+        </span>
+        <span className={styles.matchInfoToggleState}>{open ? 'Hide' : 'Show'}</span>
+      </button>
+
+      {open ? (
+        <div id={contentId} className={styles.matchInfoBody}>
+          <div className={styles.matchInfoSections}>
+            {matchInfoEntries.map((matchInfoEntry) => {
+              const MatchInfoComponent = resolveMatchInfoComponent(matchInfoEntry)
+
+              return (
+                <section key={matchInfoEntry.side} className={styles.matchInfoSection}>
+                  <div className={styles.matchInfoHeader}>
+                    <span
+                      className={[
+                        styles.sideBadge,
+                        matchInfoEntry.side === 'white'
+                          ? styles.sideBadgeWhite
+                          : styles.sideBadgeBlack,
+                      ].join(' ')}
+                    >
+                      {sideLabels[matchInfoEntry.side]}
+                    </span>
+                    <span className={styles.matchInfoBadge}>Read-only</span>
+                  </div>
+
+                  <div className={styles.actorIdentity}>
+                    <h3 className={styles.actorTitle}>{matchInfoEntry.displayName}</h3>
+                    <p className={styles.actorSummary}>{matchInfoEntry.summary}</p>
+                  </div>
+
+                  <div className={styles.matchInfoSlot}>
+                    <MatchInfoComponent
+                      side={matchInfoEntry.side}
+                      value={matchInfoEntry.actorConfig}
+                    />
+                  </div>
+                </section>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export const GamePage = reatomMemo(({
   model,
 }: {
@@ -241,7 +322,9 @@ export const GamePage = reatomMemo(({
 }) => {
   const boardPanelRef = useRef<HTMLDivElement | null>(null)
   const historyListRef = useRef<HTMLDivElement | null>(null)
+  const matchInfoId = useId()
   const [boardPanelHeight, setBoardPanelHeight] = useState<number | null>(null)
+  const [matchInfoOpen, setMatchInfoOpen] = useState(false)
   const snapshot = model.snapshot()
   const phase = model.phase()
   const runtimeError = model.runtimeError()
@@ -259,6 +342,7 @@ export const GamePage = reatomMemo(({
   const statusView = model.statusView()
   const boardInteractive = model.boardInteractive()
   const actorPanels = model.actorPanels()
+  const matchInfoEntries = model.matchInfoEntries()
   const hasActorControls = actorPanels.some((actorPanel) => actorPanel.hasControls)
   const controlsNotice = getActorControlsNotice({
     isAtLatestMove: model.isAtLatestMove,
@@ -423,6 +507,15 @@ export const GamePage = reatomMemo(({
               <span className={styles.statusPillCritical}>Action required</span>
             ) : null}
           </div>
+
+          {renderMatchInfoDisclosure({
+            matchInfoEntries,
+            open: matchInfoOpen,
+            contentId: matchInfoId,
+            onToggle: () => {
+              setMatchInfoOpen((state) => !state)
+            },
+          })}
 
           {runtimeError && phase === 'actorError' ? (
             <div className={styles.errorBanner}>

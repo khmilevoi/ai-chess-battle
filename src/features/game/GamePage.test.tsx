@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_GOOGLE_MODEL } from '@/actors/ai-actor/google'
 import {
@@ -123,8 +124,82 @@ describe('GamePage', () => {
     expect(
       screen.getByText('Wait for confirmation before sending the OpenAI request'),
     ).toBeInTheDocument()
-    expect(screen.getByText(/Moves are selected directly on the board\./)).toBeInTheDocument()
+    expect(
+      screen.getAllByText(/Moves are selected directly on the board\./).length,
+    ).toBeGreaterThan(0)
     expect(screen.queryByRole('heading', { name: 'Position' })).not.toBeInTheDocument()
+  })
+
+  it('renders read-only match info for both sides and hides API keys', async () => {
+    const user = userEvent.setup()
+    const model = await createStartedModel({
+      config: {
+        white: createOpenAiSide(),
+        black: createDefaultSideConfig('human'),
+      },
+    })
+
+    render(<GamePage model={model} />)
+
+    const toggle = screen.getByRole('button', { name: /Match info/i })
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('GPT-5.4')).not.toBeInTheDocument()
+
+    await user.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    const contentId = toggle.getAttribute('aria-controls')
+    const matchInfoContent =
+      contentId === null ? null : document.getElementById(contentId)
+
+    expect(matchInfoContent).not.toBeNull()
+
+    const panel = within(matchInfoContent as HTMLElement)
+
+    expect(panel.getByText('White')).toBeInTheDocument()
+    expect(panel.getByText('Black')).toBeInTheDocument()
+    expect(panel.getByText('GPT-5.4')).toBeInTheDocument()
+    expect(panel.getByText('High')).toBeInTheDocument()
+    expect(
+      panel.getByText('Black moves are entered directly on the board.'),
+    ).toBeInTheDocument()
+    expect(panel.queryByText('sk-test')).not.toBeInTheDocument()
+  })
+
+  it('falls back to raw saved model values when they are outside the curated options', async () => {
+    const user = userEvent.setup()
+    const model = await createStartedModel({
+      config: {
+        white: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: 'custom-openai-model',
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+        black: createDefaultSideConfig('human'),
+      },
+    })
+
+    render(<GamePage model={model} />)
+
+    const toggle = screen.getByRole('button', { name: /Match info/i })
+
+    expect(screen.queryByText('custom-openai-model')).not.toBeInTheDocument()
+
+    await user.click(toggle)
+
+    const contentId = toggle.getAttribute('aria-controls')
+    const matchInfoContent =
+      contentId === null ? null : document.getElementById(contentId)
+
+    expect(matchInfoContent).not.toBeNull()
+    expect(
+      within(matchInfoContent as HTMLElement).getByText('custom-openai-model'),
+    ).toBeInTheDocument()
   })
 
   it('renders a shared OpenAI control card when both sides use the same actor type', async () => {

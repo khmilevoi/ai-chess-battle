@@ -13,7 +13,7 @@ import {
 } from './config.schema'
 import { OpenAiActorControls } from './controls'
 import { OpenAiActorRuntime } from './model'
-import { OpenAiActorSettings } from './ui'
+import { OpenAiActorMatchInfo, OpenAiActorSettings } from './ui'
 
 export const openAiActorStoredControlsSchema = aiActorStoredControlsSchema
 export type OpenAiActorStoredControls = AiActorStoredControls
@@ -29,6 +29,7 @@ export const OpenAiActor = defineActor({
     reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
   }),
   SettingsComponent: OpenAiActorSettings,
+  MatchInfoComponent: OpenAiActorMatchInfo,
   ControlsComponent: OpenAiActorControls,
   controlsContract: createAiActorControlsContract({
     controlGroupKey: 'openai',

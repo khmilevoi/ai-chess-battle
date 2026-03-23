@@ -1,5 +1,5 @@
-import type { ActorSettingsProps } from '../../types'
-import { AiProviderSettings } from '../providerSettings'
+import type { ActorMatchInfoProps, ActorSettingsProps } from '../../types'
+import { AiProviderSettings, getOptionLabel } from '../providerSettings'
 import { GOOGLE_MODEL_OPTIONS, type GoogleActorConfig } from './config.schema'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
 
@@ -23,3 +23,16 @@ export const GoogleActorSettings = reatomMemo(({
     />
   )
 }, 'GoogleActorSettings')
+
+export const GoogleActorMatchInfo = reatomMemo(({
+  value,
+}: ActorMatchInfoProps<GoogleActorConfig>) => {
+  return (
+    <dl>
+      <div>
+        <dt>Model</dt>
+        <dd>{getOptionLabel(GOOGLE_MODEL_OPTIONS, value.model)}</dd>
+      </div>
+    </dl>
+  )
+}, 'GoogleActorMatchInfo')

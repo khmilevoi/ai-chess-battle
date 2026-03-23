@@ -41,7 +41,7 @@ export class AnthropicActorRuntime extends AiActor {
     this.client = new Anthropic({
       apiKey: this.config.apiKey,
       dangerouslyAllowBrowser: true,
-      maxRetries: 0,
+      maxRetries: 2,
     })
   }
 
