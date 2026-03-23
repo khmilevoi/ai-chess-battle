@@ -3,13 +3,11 @@ import {
   TurnCancelledError,
   type ActorRequestError,
 } from '../../shared/errors'
-import type { ActorMove } from '../../domain/chess/types'
+import type { ActorMove, Side } from '../../domain/chess/types'
+import { reatomGate } from '../../shared/reatom/reatomGate'
 import type { InteractiveActor } from '../types'
 
-type PendingMoveRequest = {
-  resolve: (result: ActorMove | ActorRequestError) => void
-  cleanup: () => void
-}
+let humanActorRuntimeId = 0
 
 function toTurnCancelledError(
   side: Parameters<InteractiveActor['requestMove']>[0]['context']['side'],
@@ -25,51 +23,41 @@ function toTurnCancelledError(
   })
 }
 
+function createMoveGate(name: string) {
+  return reatomGate<ActorMove | ActorRequestError, { side: Side }, ActorError>({
+    name,
+    mapAbort: ({ params, reason }) => toTurnCancelledError(params.side, reason),
+    mapConcurrentSpawn: () =>
+      new ActorError({
+        message: 'Human actor is already waiting for a move.',
+      }),
+    mapMissingPendingSend: () =>
+      new ActorError({
+        message: 'Human actor does not have a pending move request.',
+      }),
+  })
+}
+
 export class HumanActorRuntime implements InteractiveActor {
   readonly kind = 'interactive'
 
-  private pending: PendingMoveRequest | null = null
+  private readonly moveGate: ReturnType<typeof createMoveGate>
+
+  constructor(name = `humanActorRuntime#${++humanActorRuntimeId}`) {
+    this.moveGate = createMoveGate(`${name}.moveGate`)
+  }
 
   async requestMove({
     context,
     signal,
   }: Parameters<InteractiveActor['requestMove']>[0]) {
-    if (this.pending) {
-      return new ActorError({
-        message: 'Human actor is already waiting for a move.',
-      })
-    }
-
-    if (signal.aborted) {
-      return toTurnCancelledError(context.side, signal.reason)
-    }
-
-    return await new Promise<ActorMove | ActorRequestError>((resolve) => {
-      const onAbort = () => {
-        cleanup()
-        resolve(toTurnCancelledError(context.side, signal.reason))
-      }
-
-      const cleanup = () => {
-        signal.removeEventListener('abort', onAbort)
-        this.pending = null
-      }
-
-      signal.addEventListener('abort', onAbort, { once: true })
-      this.pending = { resolve, cleanup }
+    return await this.moveGate.spawn({
+      signal,
+      params: { side: context.side },
     })
   }
 
   submitMove(move: ActorMove): ActorError | null {
-    if (!this.pending) {
-      return new ActorError({
-        message: 'Human actor does not have a pending move request.',
-      })
-    }
-
-    const pending = this.pending
-    pending.cleanup()
-    pending.resolve(move)
-    return null
+    return this.moveGate.send(move)
   }
 }

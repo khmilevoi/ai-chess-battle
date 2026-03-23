@@ -36,7 +36,11 @@ export const rootRoute = reatomRoute({
               <h1 className={styles.name}>AI Chess Battle</h1>
             </div>
           </header>
-          {content.length > 0 ? content : <div className={styles.routePlaceholder}>Redirecting…</div>}
+          {(content?.length ?? 0) > 0 ? (
+            content
+          ) : (
+            <div className={styles.routePlaceholder}>Redirecting…</div>
+          )}
         </div>
       </div>
     )

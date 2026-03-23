@@ -209,6 +209,75 @@ describe('createGameModel', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
+  it('ignores repeated retryTurn calls once the loop restarts', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            output_text: '{"from":"a1","to":"a2","promotion":"null"}',
+            output: [],
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            output_text: '{"from":"a1","to":"a2","promotion":"null"}',
+            output: [],
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(createOpenAiResponse('e2e4'))
+
+    const config: MatchConfig = {
+      white: {
+        actorKey: 'openai',
+        actorConfig: {
+          apiKey: 'sk-test',
+          model: DEFAULT_OPENAI_MODEL,
+          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+        },
+      },
+      black: createDefaultSideConfig('human'),
+    }
+
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      config,
+      initialSession: null,
+      leaveToSetup: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+    await flush(4)
+
+    expect(model.phase()).toBe('actorError')
+
+    model.retryTurn()
+    model.retryTurn()
+
+    await flush(4)
+
+    expect(model.snapshot()?.history).toEqual(['e2e4'])
+    expect(model.phase()).toBe('playing')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('continues bot versus bot matches after the first move', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

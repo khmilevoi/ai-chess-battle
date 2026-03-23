@@ -4,7 +4,6 @@ import {
   action,
   atom,
   computed,
-  effect,
   reatomEnum,
   withAbort,
   withAsync,
@@ -147,10 +146,6 @@ function createSideActors(config: MatchConfig): SideActors | Error {
   }
 }
 
-function getTurnKey(snapshot: BoardSnapshot): string {
-  return `${snapshot.history.length}:${snapshot.fen}`
-}
-
 export function createGameModel({
   name,
   config,
@@ -162,7 +157,6 @@ export function createGameModel({
   const actors = atom<SideActors | null>(null, `${name}.actors`)
   const selectedSquare = atom<Square | null>(null, `${name}.selectedSquare`)
   const runtimeError = atom<Error | null>(null, `${name}.runtimeError`)
-  const requestedTurnKey = atom<string | null>(null, `${name}.requestedTurnKey`)
   const turnActivity = reatomEnum(['idle', 'awaitingActor', 'applyingMove'], {
     name: `${name}.turnActivity`,
     initState: 'idle',
@@ -185,7 +179,7 @@ export function createGameModel({
   const resetState = action(() => {
     const currentSnapshot = snapshot()
 
-    playTurn.abort(
+    runMatchLoop.abort(
       new TurnCancelledError({
         side: currentSnapshot?.turn ?? 'white',
       }),
@@ -195,7 +189,6 @@ export function createGameModel({
     snapshot.set(null)
     selectedSquare.set(null)
     runtimeError.set(null)
-    requestedTurnKey.set(null)
     turnActivity.setIdle()
     phase.setPending()
     return null
@@ -260,27 +253,32 @@ export function createGameModel({
     return currentSnapshot.history.join('\n')
   }, `${name}.historyText`)
   const boardInteractive = computed(() => {
-    return phase() === 'playing' && activeHumanActor() !== null
+    return (
+      phase() === 'playing' &&
+      turnActivity() === 'awaitingActor' &&
+      activeHumanActor() !== null
+    )
   }, `${name}.boardInteractive`)
   const statusView = computed(() => {
     const currentSnapshot = snapshot()
+    const currentPhase = phase()
     const currentError = runtimeError()
     const currentActorLabel = activeActorLabel()
-    const playTurnStatus = playTurn.status()
     const currentHumanActor = activeHumanActor()
+    const currentTurnActivity = turnActivity()
 
-    if (!currentSnapshot) {
+    if (!currentSnapshot || currentPhase === 'pending') {
       return {
         title: 'Preparing match',
         detail: 'Rebuilding board state and actor runtime.',
         tone: 'neutral',
         busy: true,
-        actorLabel: null,
+        actorLabel: currentSnapshot ? currentActorLabel : null,
         canRetry: false,
       } satisfies GameStatusView
     }
 
-    if (phase() === 'actorError') {
+    if (currentPhase === 'actorError') {
       return {
         title: 'Turn failed',
         detail: currentError?.message ?? 'The current turn failed.',
@@ -291,7 +289,7 @@ export function createGameModel({
       } satisfies GameStatusView
     }
 
-    if (phase() === 'gameOver') {
+    if (currentPhase === 'gameOver') {
       return {
         title: 'Game over',
         detail: formatStatus(currentSnapshot),
@@ -302,18 +300,18 @@ export function createGameModel({
       } satisfies GameStatusView
     }
 
-    if (playTurnStatus.isPending) {
-      if (turnActivity() === 'applyingMove') {
-        return {
-          title: 'Applying move',
-          detail: `${currentActorLabel ?? 'Current actor'} submitted a move.`,
-          tone: 'warning',
-          busy: true,
-          actorLabel: currentActorLabel,
-          canRetry: false,
-        } satisfies GameStatusView
-      }
+    if (currentTurnActivity === 'applyingMove') {
+      return {
+        title: 'Applying move',
+        detail: `${currentActorLabel ?? 'Current actor'} submitted a move.`,
+        tone: 'warning',
+        busy: true,
+        actorLabel: currentActorLabel,
+        canRetry: false,
+      } satisfies GameStatusView
+    }
 
+    if (currentTurnActivity === 'awaitingActor') {
       if (currentHumanActor) {
         return {
           title: 'Waiting for move',
@@ -356,7 +354,73 @@ export function createGameModel({
     } satisfies GameStatusView
   }, `${name}.statusView`)
 
-  const playTurn = action(async () => {
+  const handleTurnFailure = (error: Error) => {
+    turnActivity.setIdle()
+
+    if (errore.isAbortError(error)) {
+      return error
+    }
+
+    runtimeError.set(error)
+    phase.setActorError()
+    return error
+  }
+  const requestCurrentActorMove = async () => {
+    const currentEngine = engine()
+    const currentActors = actors()
+    const currentSnapshot = snapshot()
+
+    if (!currentEngine || !currentActors || !currentSnapshot) {
+      return null
+    }
+
+    turnActivity.setAwaitingActor()
+
+    const controller = abortVar.first()
+
+    if (!controller) {
+      return new TurnCancelledError({ side: currentSnapshot.turn })
+    }
+
+    const actorContext = buildActorContext(currentEngine, currentSnapshot)
+    return await wrap(
+      currentActors[currentSnapshot.turn].actor.requestMove({
+        context: actorContext,
+        signal: controller.signal,
+      }),
+    )
+  }
+  const applyResolvedMove = (move: ActorMove) => {
+    const currentEngine = engine()
+    const currentSnapshot = snapshot()
+
+    if (!currentEngine || !currentSnapshot) {
+      return null
+    }
+
+    turnActivity.setApplyingMove()
+
+    const nextSnapshot = currentEngine.applyMove(move)
+
+    if (nextSnapshot instanceof Error) {
+      return nextSnapshot
+    }
+
+    snapshot.set(nextSnapshot)
+    selectedSquare.set(null)
+    runtimeError.set(null)
+    turnActivity.setIdle()
+    persistSnapshot(nextSnapshot)
+
+    if (isTerminalStatus(nextSnapshot.status)) {
+      phase.setGameOver()
+      return nextSnapshot
+    }
+
+    phase.setPlaying()
+    return nextSnapshot
+  }
+  const playSingleTurn = async () => {
     const currentEngine = engine()
     const currentActors = actors()
     const currentSnapshot = snapshot()
@@ -375,104 +439,74 @@ export function createGameModel({
     }
 
     runtimeError.set(null)
-    turnActivity.setAwaitingActor()
 
-    const controller = abortVar.first()
+    const result = await wrap(requestCurrentActorMove())
 
-    if (!controller) {
-      turnActivity.setIdle()
-      return new TurnCancelledError({
-        side: currentSnapshot.turn,
-      })
+    if (result === null) {
+      return null
     }
 
-    const actorContext = buildActorContext(currentEngine, currentSnapshot)
-    const result = await wrap(
-      currentActors[currentSnapshot.turn].actor.requestMove({
-        context: actorContext,
-        signal: controller.signal,
-      }),
-    )
-
     if (errore.isAbortError(result)) {
-      turnActivity.setIdle()
-      return result
+      return handleTurnFailure(result)
     }
 
     if (result instanceof Error) {
-      runtimeError.set(result)
-      turnActivity.setIdle()
-      phase.setActorError()
-      return result
+      return handleTurnFailure(result)
     }
 
-    turnActivity.setApplyingMove()
+    const nextSnapshot = applyResolvedMove(result)
 
-    const nextSnapshot = currentEngine.applyMove(result)
+    if (nextSnapshot === null) {
+      return null
+    }
 
     if (nextSnapshot instanceof Error) {
-      runtimeError.set(nextSnapshot)
-      turnActivity.setIdle()
-      phase.setActorError()
-      return nextSnapshot
+      return handleTurnFailure(nextSnapshot)
     }
 
-    snapshot.set(nextSnapshot)
-    selectedSquare.set(null)
-    runtimeError.set(null)
-    turnActivity.setIdle()
-    persistSnapshot(nextSnapshot)
-
-    if (isTerminalStatus(nextSnapshot.status)) {
-      phase.setGameOver()
-      return nextSnapshot
-    }
-
-    phase.setPlaying()
     return nextSnapshot
-  }, `${name}.playTurn`).extend(
+  }
+  const runMatchLoop = action(async () => {
+    while (phase() === 'playing') {
+      const currentEngine = engine()
+      const currentActors = actors()
+      const currentSnapshot = snapshot()
+
+      if (!currentEngine || !currentActors || !currentSnapshot) {
+        return null
+      }
+
+      if (isTerminalStatus(currentSnapshot.status)) {
+        phase.setGameOver()
+        return currentSnapshot
+      }
+
+      const turnResult = await wrap(playSingleTurn())
+
+      if (turnResult === null) {
+        return null
+      }
+
+      if (errore.isAbortError(turnResult)) {
+        return turnResult
+      }
+
+      if (turnResult instanceof Error) {
+        return turnResult
+      }
+
+      if (isTerminalStatus(turnResult.status)) {
+        return turnResult
+      }
+    }
+
+    return null
+  }, `${name}.runMatchLoop`).extend(
     withAsync({
       status: true,
     }),
     withAbort(),
   )
-
-  const turnLoop = effect(() => {
-    const currentSnapshot = snapshot()
-    const currentActors = actors()
-    const currentPhase = phase()
-    const currentTurnActivity = turnActivity()
-
-    if (currentSnapshot === null || currentActors === null) {
-      return
-    }
-
-    if (currentPhase !== 'playing') {
-      return
-    }
-
-    if (isTerminalStatus(currentSnapshot.status)) {
-      phase.setGameOver()
-      return
-    }
-
-    if (currentTurnActivity !== 'idle') {
-      return
-    }
-
-    const currentTurnKey = getTurnKey(currentSnapshot)
-
-    if (requestedTurnKey() === currentTurnKey) {
-      return
-    }
-
-    requestedTurnKey.set(currentTurnKey)
-    queueMicrotask(
-      wrap(() => {
-        void playTurn()
-      }),
-    )
-  }, `${name}.turnLoop`)
 
   const startMatch = action(async () => {
     resetState()
@@ -513,7 +547,6 @@ export function createGameModel({
     snapshot.set(restoredState.snapshot)
     selectedSquare.set(null)
     runtimeError.set(null)
-    requestedTurnKey.set(null)
     turnActivity.setIdle()
     persistSnapshot(restoredState.snapshot)
 
@@ -522,24 +555,22 @@ export function createGameModel({
       return null
     }
 
-    requestedTurnKey.set(getTurnKey(restoredState.snapshot))
     phase.setPlaying()
-    void playTurn()
+    void runMatchLoop()
     return null
   }, `${name}.startMatch`)
 
   const retryTurn = action(() => {
     const currentSnapshot = snapshot()
 
-    if (!currentSnapshot) {
+    if (!currentSnapshot || phase() !== 'actorError') {
       return null
     }
 
     runtimeError.set(null)
     turnActivity.setIdle()
-    requestedTurnKey.set(getTurnKey(currentSnapshot))
     phase.setPlaying()
-    void playTurn()
+    void runMatchLoop()
     return null
   }, `${name}.retryTurn`)
 
@@ -597,7 +628,6 @@ export function createGameModel({
   }, `${name}.leaveMatch`)
 
   const dispose = action(() => {
-    turnLoop.unsubscribe()
     resetState()
     return null
   }, `${name}.dispose`)
