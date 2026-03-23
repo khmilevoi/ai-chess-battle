@@ -50,6 +50,15 @@ type ActiveActorState = {
   actor: ActorModel
 }
 
+type ActorPanelEntry = {
+  side: BoardSnapshot['turn']
+  actorKey: MatchConfig[BoardSnapshot['turn']]['actorKey']
+  actor: ActorModel
+  displayName: string
+  hasControls: boolean
+  isActive: boolean
+}
+
 type HistoryMove = {
   moveNumber: number
   uci: string
@@ -249,6 +258,28 @@ export function createGameModel({
       actor: currentActors[currentSnapshot.turn].actor,
     } satisfies ActiveActorState
   }, `${name}.activeActorState`)
+  const actorPanels = computed(() => {
+    const currentActors = actors()
+    const currentSnapshot = snapshot()
+
+    if (!currentActors) {
+      return [] as Array<ActorPanelEntry>
+    }
+
+    return (['white', 'black'] as const).map((side) => {
+      const actorState = currentActors[side]
+      const descriptor = getRegisteredActor(actorState.actorKey)
+
+      return {
+        side,
+        actorKey: actorState.actorKey,
+        actor: actorState.actor,
+        displayName: descriptor.displayName,
+        hasControls: descriptor.ControlsComponent !== undefined,
+        isActive: currentSnapshot?.turn === side,
+      } satisfies ActorPanelEntry
+    })
+  }, `${name}.actorPanels`)
   const activeHumanActor = computed(() => {
     const currentActorState = activeActorState()
 
@@ -912,6 +943,7 @@ export function createGameModel({
     selectedSquare,
     selectedLegalMoves,
     movableSquares,
+    actorPanels,
     activeActorControls,
     activeHumanActor,
     statusText,

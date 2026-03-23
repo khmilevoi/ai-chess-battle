@@ -371,4 +371,95 @@ describe('createGameModel', () => {
 
     expect(model.activeActorControls()).toBeNull()
   })
+
+  it('exposes both actor panels and updates the active side as turns change', async () => {
+    let resolveFirstMove: ((response: Response) => void) | null = null
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFirstMove = resolve
+          }),
+      )
+      .mockImplementationOnce(() => new Promise(() => {}))
+
+    const game = createSavedGame({
+      config: {
+        white: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+        black: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+      },
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+    expect(model.actorPanels()).toEqual([
+      expect.objectContaining({
+        side: 'white',
+        displayName: 'OpenAI Actor',
+        hasControls: true,
+        isActive: true,
+      }),
+      expect.objectContaining({
+        side: 'black',
+        displayName: 'OpenAI Actor',
+        hasControls: true,
+        isActive: false,
+      }),
+    ])
+
+    await waitForCondition(() => resolveFirstMove !== null)
+    ;(resolveFirstMove as null | ((response: Response) => void))?.(
+      createOpenAiResponse('e2e4'),
+    )
+    await waitForCondition(() =>
+      model.actorPanels().some((actorPanel) => actorPanel.side === 'black' && actorPanel.isActive),
+    )
+
+    expect(model.actorPanels()).toEqual([
+      expect.objectContaining({
+        side: 'white',
+        isActive: false,
+      }),
+      expect.objectContaining({
+        side: 'black',
+        isActive: true,
+      }),
+    ])
+
+    model.goToMove(0)
+    await flush(2)
+
+    expect(model.actorPanels()).toEqual([
+      expect.objectContaining({
+        side: 'white',
+        isActive: true,
+      }),
+      expect.objectContaining({
+        side: 'black',
+        isActive: false,
+      }),
+    ])
+  })
 })

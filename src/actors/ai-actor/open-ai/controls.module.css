@@ -1,0 +1,153 @@
+.controls {
+  display: grid;
+  gap: 12px;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.titleWrap {
+  display: grid;
+  gap: 6px;
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.summary {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.stateBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #050505;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stateBadgeManual {
+  background: #050505;
+  color: #ffffff;
+}
+
+.stateBadgeAuto {
+  background: #ffffff;
+  color: #050505;
+}
+
+.toggleCard {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  cursor: pointer;
+  padding: 0;
+}
+
+.checkbox {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 1px solid #050505;
+  background: #ffffff;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.checkbox::after {
+  content: '';
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+.checkbox:checked {
+  background: #050505;
+  border-color: #050505;
+  box-shadow: 3px 3px 0 rgba(5, 5, 5, 0.12);
+}
+
+.checkbox:checked::after {
+  border-left-color: #ffffff;
+  border-bottom-color: #ffffff;
+}
+
+.checkbox:focus-visible {
+  outline: 2px solid #050505;
+  outline-offset: 2px;
+}
+
+.toggleCopy {
+  display: grid;
+  gap: 4px;
+}
+
+.toggleTitle {
+  font-weight: 600;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.toggleHint,
+.actionText {
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.actionCard {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid rgba(5, 5, 5, 0.14);
+}
+
+.actionMeta {
+  display: grid;
+  gap: 3px;
+  max-width: 20ch;
+}
+
+.actionLabel {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.actionText {
+  margin: 0;
+}
+
+.actionButton {
+  justify-content: center;
+  min-width: 160px;
+}
