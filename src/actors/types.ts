@@ -21,6 +21,11 @@ export type ActorSettingsProps<Config> = {
   errors: Record<string, Array<string>>
 }
 
+export type ActorControlsProps<Model extends AnyActorModel = AnyActorModel> = {
+  side: Side
+  actor: Model
+}
+
 export interface ActorDescriptor<
   Key extends string = string,
   Model extends AnyActorModel = AnyActorModel,
@@ -36,6 +41,7 @@ export interface ActorDescriptor<
   createDefaultConfig: () => Config
   create: (config: unknown) => Model | ActorConfigError
   SettingsComponent: SettingsComponent
+  ControlsComponent?: ComponentType<ActorControlsProps<Model>>
 }
 
 export function defineActor<
@@ -61,6 +67,12 @@ type ActorDescriptorParts<Descriptor> =
         model: Model
         config: Config
         SettingsComponent: SettingsComponent
+        ControlsComponent: ActorDescriptor<
+          Key,
+          Model & AnyActorModel,
+          Config,
+          SettingsComponent & ComponentType<ActorSettingsProps<Config>>
+        >['ControlsComponent']
       }
     : never
 
@@ -98,6 +110,18 @@ export type ActorUIOf<Descriptor> =
 
 export type ActorSettingsPropsOf<Descriptor> =
   ActorConfigOf<Descriptor> extends infer Config ? ActorSettingsProps<Config> : never
+
+export type ActorControlsUIOf<Descriptor> =
+  ActorDescriptorParts<Descriptor> extends {
+    ControlsComponent: infer ControlsComponent
+  }
+    ? ControlsComponent
+    : never
+
+export type ActorControlsPropsOf<Descriptor> =
+  ActorModelOf<Descriptor> extends infer Model
+    ? ActorControlsProps<Model & AnyActorModel>
+    : never
 
 export type MatchSideConfigOf<Descriptor> =
   ActorDescriptorParts<Descriptor> extends {

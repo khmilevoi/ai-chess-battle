@@ -1,7 +1,16 @@
 import * as errore from 'errore'
 import OpenAI, { APIError, APIUserAbortError } from 'openai'
+import {
+  action,
+  atom,
+  named,
+  type Action,
+  type Atom,
+  type Computed,
+} from '@reatom/core'
 import { z } from 'zod'
 import {
+  ActorError,
   IllegalMoveError,
   OpenAiHttpError,
   OpenAiResponseError,
@@ -9,7 +18,13 @@ import {
   TurnCancelledError,
   type ActorRequestError,
 } from '../../shared/errors'
-import { toUciMove, type ActorMove } from '../../domain/chess/types'
+import { toUciMove, type ActorMove, type Side } from '../../domain/chess/types'
+import {
+  ReatomGateAbortError,
+  ReatomGateConcurrentSpawnError,
+  ReatomGateMissingPendingSendError,
+  reatomGate,
+} from '../../shared/reatom/reatomGate'
 import type { AutonomousActor } from '../types'
 import type { OpenAiActorConfig } from './config.schema'
 
@@ -95,19 +110,102 @@ function isAbortRequestError(error: unknown, signal: AbortSignal) {
   )
 }
 
+function toTurnCancelledError(
+  side: Side,
+  reason: unknown,
+): TurnCancelledError {
+  if (reason instanceof TurnCancelledError) {
+    return reason
+  }
+
+  return new TurnCancelledError({
+    side,
+    cause: reason,
+  })
+}
+
+function createConfirmationGate(name: string) {
+  return reatomGate<null, { side: Side }>({ name })
+}
+
 export class OpenAiActorRuntime implements AutonomousActor {
   readonly kind = 'autonomous'
+  readonly waitForConfirmation: Atom<boolean>
+  readonly confirmationPending: Computed<{ params: { side: Side } } | null>
+  readonly isConfirmationPending: Computed<boolean>
+  readonly setWaitForConfirmation: Action<[next: boolean], null>
+  readonly confirmMoveRequest: Action<[], ActorError | null>
 
   private readonly config: OpenAiActorConfig
   private readonly client: OpenAI
+  private readonly confirmationGate: ReturnType<typeof createConfirmationGate>
 
-  constructor(config: OpenAiActorConfig) {
+  constructor(
+    config: OpenAiActorConfig,
+    name: string = named('openAiActorRuntime'),
+  ) {
     this.config = config
     this.client = new OpenAI({
       apiKey: this.config.apiKey,
       baseURL: 'https://api.openai.com/v1',
       dangerouslyAllowBrowser: true,
     })
+    this.confirmationGate = createConfirmationGate(`${name}.confirmationGate`)
+    this.waitForConfirmation = atom(false, `${name}.waitForConfirmation`)
+    this.confirmationPending = this.confirmationGate.pending
+    this.isConfirmationPending = this.confirmationGate.isPending
+    this.setWaitForConfirmation = action((next: boolean) => {
+      this.waitForConfirmation.set(next)
+
+      if (!next && this.confirmationGate.isPending()) {
+        this.confirmationGate.send(null)
+      }
+
+      return null
+    }, `${name}.setWaitForConfirmation`)
+    this.confirmMoveRequest = action(() => {
+      if (!this.waitForConfirmation()) {
+        return null
+      }
+
+      const result = this.confirmationGate.send(null)
+
+      if (result instanceof ReatomGateMissingPendingSendError) {
+        return new ActorError({
+          message: 'OpenAI actor does not have a pending confirmation request.',
+          cause: result,
+        })
+      }
+
+      return null
+    }, `${name}.confirmMoveRequest`)
+  }
+
+  async beforeRequestMove({
+    context,
+    signal,
+  }: Parameters<AutonomousActor['requestMove']>[0]): Promise<ActorRequestError | null> {
+    if (!this.waitForConfirmation()) {
+      return null
+    }
+
+    const result = await this.confirmationGate.spawn({
+      signal,
+      params: { side: context.side },
+    })
+
+    if (result instanceof ReatomGateAbortError) {
+      return toTurnCancelledError(context.side, result)
+    }
+
+    if (result instanceof ReatomGateConcurrentSpawnError) {
+      return new ActorError({
+        message: 'OpenAI actor is already waiting for request confirmation.',
+        cause: result,
+      })
+    }
+
+    return null
   }
 
   async requestMove({

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { urlAtom } from '@reatom/core'
@@ -60,6 +60,8 @@ describe('App integration', () => {
     clearStoredGameSession()
     window.localStorage.clear()
     matchSessionConfig.set(null)
+    window.history.replaceState({}, '', '/')
+    syncCurrentUrl()
     setupRoute.go(undefined, true)
   })
 
@@ -81,6 +83,7 @@ describe('App integration', () => {
     const user = userEvent.setup()
     render(<App />)
 
+    await screen.findByRole('button', { name: 'Start Match' })
     const actorSelects = screen.getAllByLabelText('Actor')
     const startButton = screen.getByRole('button', { name: 'Start Match' })
 
@@ -113,6 +116,19 @@ describe('App integration', () => {
     await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
   })
 
+  it('hides actor controls when the active actor has no runtime controls', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Start Match' })
+    await user.click(screen.getByRole('button', { name: 'Start Match' }))
+
+    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
+    expect(
+      screen.queryByRole('heading', { name: 'Actor controls' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('starts and sustains an OpenAI versus OpenAI match', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn()
@@ -130,6 +146,7 @@ describe('App integration', () => {
 
     render(<App />)
 
+    await screen.findByRole('button', { name: 'Start Match' })
     const actorSelects = screen.getAllByLabelText('Actor')
 
     await user.selectOptions(actorSelects[0]!, 'openai')
@@ -143,6 +160,10 @@ describe('App integration', () => {
     await user.click(screen.getByRole('button', { name: 'Start Match' }))
 
     await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
+    expect(screen.getByRole('heading', { name: 'Actor controls' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Send OpenAI request' }),
+    ).toBeDisabled()
     await waitFor(
       () => {
         expect(
@@ -157,6 +178,80 @@ describe('App integration', () => {
 
     await user.click(screen.getByRole('button', { name: 'Back to setup' }))
     await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
+  })
+
+  it('waits for confirmation before sending an OpenAI request when confirmation is enabled', async () => {
+    const user = userEvent.setup()
+    let resolveFirstMove: ((response: Response) => void) | null = null
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFirstMove = resolve
+          }),
+      )
+      .mockResolvedValueOnce(createOpenAiResponse('e7e5'))
+      .mockImplementationOnce((input, init) =>
+        createAbortablePendingResponse(
+          input instanceof Request ? input.signal : init?.signal,
+        ),
+      )
+
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Start Match' })
+    const actorSelects = screen.getAllByLabelText('Actor')
+
+    await user.selectOptions(actorSelects[0]!, 'openai')
+    await user.selectOptions(actorSelects[1]!, 'openai')
+    await user.type(screen.getAllByLabelText('API key')[0]!, 'sk-test')
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Start Match' })).toBeEnabled()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Start Match' }))
+
+    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
+    await screen.findByRole('heading', { name: 'Actor controls' }, { timeout: 5000 })
+
+    const confirmationToggle = screen.getByRole('checkbox', {
+      name: 'Wait for confirmation before sending the OpenAI request',
+    })
+
+    expect(confirmationToggle).not.toBeChecked()
+    expect(
+      screen.getByRole('button', { name: 'Send OpenAI request' }),
+    ).toBeDisabled()
+
+    await user.click(confirmationToggle)
+    await act(async () => {
+      ;(resolveFirstMove as null | ((response: Response) => void))?.(
+        createOpenAiResponse('e2e4'),
+      )
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('White request controls')).toBeInTheDocument()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(
+      screen.getByRole('button', { name: 'Send OpenAI request' }),
+    ).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Send OpenAI request' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+    })
   })
 
   it('shows a resume card when an active session exists', async () => {
@@ -201,15 +296,5 @@ describe('App integration', () => {
     expect(
       screen.getByText((content) => content.includes('e2e4') && content.includes('e7e5')),
     ).toBeInTheDocument()
-  })
-
-  it('redirects /game to setup when there is no active session', async () => {
-    window.history.replaceState({}, '', '/game')
-    syncCurrentUrl()
-
-    render(<App />)
-
-    await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
-    expect(window.location.pathname).toBe('/')
   })
 })

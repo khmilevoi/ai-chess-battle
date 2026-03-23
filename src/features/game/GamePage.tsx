@@ -1,7 +1,36 @@
+import type { ComponentType } from 'react'
+import { getRegisteredActor } from '../../actors/registry'
 import { Board } from '../board/Board'
 import type { GameModel } from './model'
 import styles from './GamePage.module.css'
 import { reatomMemo } from '../../shared/ui/reatomMemo'
+
+const ActiveActorControls = reatomMemo(({
+  model,
+}: {
+  model: GameModel
+}) => {
+  const controls = model.activeActorControls()
+
+  if (!controls) {
+    return null
+  }
+
+  const descriptor = getRegisteredActor(controls.actorKey)
+  const ControlsComponent =
+    descriptor.ControlsComponent as
+      | ComponentType<{
+          side: typeof controls.side
+          actor: typeof controls.actor
+        }>
+      | undefined
+
+  if (!ControlsComponent) {
+    return null
+  }
+
+  return <ControlsComponent side={controls.side} actor={controls.actor} />
+}, 'ActiveActorControls')
 
 export const GamePage = reatomMemo(({
   model,
@@ -18,6 +47,10 @@ export const GamePage = reatomMemo(({
   const statusView = model.statusView()
   const historyText = model.historyText()
   const boardInteractive = model.boardInteractive()
+  const activeActorControls = model.activeActorControls()
+  const hasActiveActorControls =
+    activeActorControls !== null &&
+    getRegisteredActor(activeActorControls.actorKey).ControlsComponent !== undefined
 
   if (!snapshot) {
     return (
@@ -118,12 +151,21 @@ export const GamePage = reatomMemo(({
           />
         </div>
 
-        <aside className={styles.panel}>
-          <h2 className={styles.panelTitle}>Position</h2>
-          <div className={styles.monoBlock}>{snapshot.fen}</div>
-          <h2 className={styles.panelTitle}>Move History</h2>
-          <div className={styles.monoBlock}>{historyText}</div>
-        </aside>
+        <div className={styles.sidebar}>
+          {hasActiveActorControls ? (
+            <aside className={styles.panel}>
+              <h2 className={styles.panelTitle}>Actor controls</h2>
+              <ActiveActorControls model={model} />
+            </aside>
+          ) : null}
+
+          <aside className={styles.panel}>
+            <h2 className={styles.panelTitle}>Position</h2>
+            <div className={styles.monoBlock}>{snapshot.fen}</div>
+            <h2 className={styles.panelTitle}>Move History</h2>
+            <div className={styles.monoBlock}>{historyText}</div>
+          </aside>
+        </div>
       </div>
     </div>
   )

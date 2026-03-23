@@ -3,6 +3,7 @@ import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
 } from '../../actors/openai'
+import { OpenAiActorRuntime } from '../../actors/openai/model'
 import { createDefaultSideConfig } from '../../actors/registry'
 import type { MatchConfig } from '../../actors/registry'
 import { ActorError } from '../../shared/errors'
@@ -16,6 +17,21 @@ async function flush(times = 1) {
   for (let index = 0; index < times; index += 1) {
     await new Promise((resolve) => window.setTimeout(resolve, 0))
   }
+}
+
+async function waitForCondition(
+  predicate: () => boolean,
+  attempts = 100,
+) {
+  for (let index = 0; index < attempts; index += 1) {
+    if (predicate()) {
+      return
+    }
+
+    await flush()
+  }
+
+  throw new Error('Timed out while waiting for condition.')
 }
 
 function createOpenAiResponse(uci: string) {
@@ -323,6 +339,105 @@ describe('createGameModel', () => {
     expect(snapshot?.history.slice(0, 2)).toEqual(['e2e4', 'e7e5'])
     expect(snapshot?.turn).toBe('white')
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+
+    model.dispose()
+  })
+
+  it('waits for beforeRequestMove before calling requestMove', async () => {
+    let releaseBeforeRequestMove: (() => void) | null = null
+    const beforeRequestMove = vi
+      .spyOn(OpenAiActorRuntime.prototype, 'beforeRequestMove')
+      .mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            releaseBeforeRequestMove = () => resolve(null)
+          }),
+      )
+    const requestMove = vi
+      .spyOn(OpenAiActorRuntime.prototype, 'requestMove')
+      .mockResolvedValue({
+        from: 'e2',
+        to: 'e4',
+        uci: 'e2e4',
+      })
+
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      config: {
+        white: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+        black: createDefaultSideConfig('human'),
+      },
+      initialSession: null,
+      leaveToSetup: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+    expect(beforeRequestMove).toHaveBeenCalledTimes(1)
+    expect(requestMove).not.toHaveBeenCalled()
+
+    ;(releaseBeforeRequestMove as null | (() => void))?.()
+    await flush(4)
+
+    expect(requestMove).toHaveBeenCalledTimes(1)
+    expect(model.snapshot()?.history).toEqual(['e2e4'])
+    expect(model.snapshot()?.turn).toBe('black')
+  })
+
+  it('moves active actor controls to the side whose turn is current', async () => {
+    let resolveFirstMove: ((response: Response) => void) | null = null
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFirstMove = resolve
+          }),
+      )
+      .mockImplementationOnce(() => new Promise(() => {}))
+
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      config: {
+        white: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+        black: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+      },
+      initialSession: null,
+      leaveToSetup: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+    expect(model.activeActorControls()?.side).toBe('white')
+
+    await waitForCondition(() => resolveFirstMove !== null)
+    ;(resolveFirstMove as null | ((response: Response) => void))?.(
+      createOpenAiResponse('e2e4'),
+    )
+    await waitForCondition(() => model.activeActorControls()?.side === 'black')
+
+    expect(model.activeActorControls()?.side).toBe('black')
 
     model.dispose()
   })

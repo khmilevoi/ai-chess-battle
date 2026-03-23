@@ -26,6 +26,8 @@ describe('actor registry', () => {
     expect(getRegisteredActor('openai')).toBe(OpenAiActor)
     expect(listRegisteredActors()).toEqual([HumanActor, OpenAiActor])
     expect(actorRegistry.human.SettingsComponent).toBe(HumanActor.SettingsComponent)
+    expect(actorRegistry.human.ControlsComponent).toBeUndefined()
+    expect(actorRegistry.openai.ControlsComponent).toBe(OpenAiActor.ControlsComponent)
   })
 
   it('returns actor-specific defaults that satisfy descriptor schemas', () => {

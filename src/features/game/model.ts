@@ -20,6 +20,7 @@ import {
   isTerminalStatus,
   toUciMove,
   type ActorContext,
+  type GameActor,
   type ActorMove,
   type BoardSnapshot,
   type ChessEngineFacade,
@@ -35,6 +36,12 @@ type SideActors = Record<
     actor: ActorModel
   }
 >
+
+type ActiveActorState = {
+  side: BoardSnapshot['turn']
+  actorKey: MatchConfig[BoardSnapshot['turn']]['actorKey']
+  actor: ActorModel
+}
 
 type GameStatusTone = 'neutral' | 'warning' | 'error' | 'success'
 
@@ -214,7 +221,7 @@ export function createGameModel({
 
     return currentEngine.getLegalMoves(square)
   }, `${name}.selectedLegalMoves`)
-  const activeHumanActor = computed(() => {
+  const activeActorState = computed(() => {
     const currentSnapshot = snapshot()
     const currentActors = actors()
 
@@ -222,17 +229,36 @@ export function createGameModel({
       return null
     }
 
-    const actor = currentActors[currentSnapshot.turn]?.actor
-    return actor.kind === 'interactive' ? actor : null
-  }, `${name}.activeHumanActor`)
-  const activeActorLabel = computed(() => {
-    const currentSnapshot = snapshot()
+    return {
+      side: currentSnapshot.turn,
+      actorKey: currentActors[currentSnapshot.turn].actorKey,
+      actor: currentActors[currentSnapshot.turn].actor,
+    } satisfies ActiveActorState
+  }, `${name}.activeActorState`)
+  const activeHumanActor = computed(() => {
+    const currentActorState = activeActorState()
 
-    if (!currentSnapshot) {
+    if (currentActorState?.actor.kind !== 'interactive') {
       return null
     }
 
-    return getRegisteredActor(config[currentSnapshot.turn].actorKey).displayName
+    return currentActorState.actor
+  }, `${name}.activeHumanActor`)
+  const activeActorControls = computed(() => {
+    if (phase() === 'pending' || phase() === 'gameOver') {
+      return null
+    }
+
+    return activeActorState()
+  }, `${name}.activeActorControls`)
+  const activeActorLabel = computed(() => {
+    const currentActorState = activeActorState()
+
+    if (!currentActorState) {
+      return null
+    }
+
+    return getRegisteredActor(currentActorState.actorKey).displayName
   }, `${name}.activeActorLabel`)
   const statusText = computed(() => {
     const currentSnapshot = snapshot()
@@ -367,10 +393,10 @@ export function createGameModel({
   }
   const requestCurrentActorMove = async () => {
     const currentEngine = engine()
-    const currentActors = actors()
     const currentSnapshot = snapshot()
+    const currentActorState = activeActorState()
 
-    if (!currentEngine || !currentActors || !currentSnapshot) {
+    if (!currentEngine || !currentSnapshot || !currentActorState) {
       return null
     }
 
@@ -383,8 +409,23 @@ export function createGameModel({
     }
 
     const actorContext = buildActorContext(currentEngine, currentSnapshot)
+    const activeActor = currentActorState.actor as GameActor
+
+    if (activeActor.beforeRequestMove) {
+      const beforeRequestResult = await wrap(
+        activeActor.beforeRequestMove({
+          context: actorContext,
+          signal: controller.signal,
+        }),
+      )
+
+      if (beforeRequestResult instanceof Error) {
+        return beforeRequestResult
+      }
+    }
+
     return await wrap(
-      currentActors[currentSnapshot.turn].actor.requestMove({
+      activeActor.requestMove({
         context: actorContext,
         signal: controller.signal,
       }),
@@ -641,6 +682,7 @@ export function createGameModel({
     selectedSquare,
     selectedLegalMoves,
     movableSquares,
+    activeActorControls,
     activeHumanActor,
     statusText,
     statusView,

@@ -116,6 +116,12 @@
   gap: 18px;
 }
 
+.sidebar {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
 .panel {
   display: grid;
   gap: 14px;

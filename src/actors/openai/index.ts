@@ -5,6 +5,7 @@ import {
   DEFAULT_OPENAI_REASONING_EFFORT,
   openAiActorConfigSchema,
 } from './config.schema'
+import { OpenAiActorControls } from './controls'
 import { OpenAiActorRuntime } from './model'
 import { OpenAiActorSettings } from './ui'
 
@@ -19,6 +20,7 @@ export const OpenAiActor = defineActor({
     reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
   }),
   SettingsComponent: OpenAiActorSettings,
+  ControlsComponent: OpenAiActorControls,
   create(config) {
     const validation = openAiActorConfigSchema.safeParse(config)
 

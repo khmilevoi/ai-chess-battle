@@ -5,6 +5,7 @@ import {
   IllegalMoveError,
   OpenAiHttpError,
   OpenAiTransportError,
+  TurnCancelledError,
 } from '../../shared/errors'
 import { createChessEngine } from '../chess/createChessEngine'
 import type { ActorContext } from '../chess/types'
@@ -13,6 +14,7 @@ import {
   DEFAULT_OPENAI_REASONING_EFFORT,
   OpenAiActor,
 } from '../../actors/openai'
+import { OpenAiActorRuntime } from '../../actors/openai/model'
 
 function createActorContext(): ActorContext {
   const engine = createChessEngine()
@@ -51,6 +53,10 @@ function createSuccessResponse(payload: string) {
   )
 }
 
+async function flushMicrotask() {
+  await Promise.resolve()
+}
+
 describe('OpenAiActor', () => {
   const config = {
     apiKey: 'test-key',
@@ -66,7 +72,7 @@ describe('OpenAiActor', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
     const actor = OpenAiActor.create(config)
 
-    if (actor instanceof Error) {
+    if (!(actor instanceof OpenAiActorRuntime)) {
       throw actor
     }
 
@@ -76,6 +82,110 @@ describe('OpenAiActor', () => {
     })
 
     expect(result).toBeInstanceOf(OpenAiTransportError)
+  })
+
+  it('does not wait for confirmation by default', async () => {
+    const actor = OpenAiActor.create(config)
+
+    if (!(actor instanceof OpenAiActorRuntime)) {
+      throw actor
+    }
+
+    expect(actor.waitForConfirmation()).toBe(false)
+    expect(actor.confirmationPending()).toBeNull()
+    expect(
+      await actor.beforeRequestMove?.({
+        context: createActorContext(),
+        signal: new AbortController().signal,
+      }),
+    ).toBeNull()
+  })
+
+  it('waits for confirmation until confirmMoveRequest releases the gate', async () => {
+    const actor = OpenAiActor.create(config)
+
+    if (!(actor instanceof OpenAiActorRuntime)) {
+      throw actor
+    }
+
+    actor.setWaitForConfirmation(true)
+
+    let settled = false
+    const pendingConfirmation = actor.beforeRequestMove?.({
+      context: createActorContext(),
+      signal: new AbortController().signal,
+    })
+
+    if (!pendingConfirmation) {
+      throw new Error('OpenAI actor is missing beforeRequestMove')
+    }
+
+    const trackedConfirmation = pendingConfirmation.then((result) => {
+      settled = true
+      return result
+    })
+
+    await flushMicrotask()
+
+    expect(settled).toBe(false)
+    expect(actor.confirmationPending()).toEqual({
+      params: { side: 'white' },
+    })
+
+    expect(actor.confirmMoveRequest()).toBeNull()
+    expect(await trackedConfirmation).toBeNull()
+    expect(actor.confirmationPending()).toBeNull()
+  })
+
+  it('returns cancellation when confirmation wait is aborted', async () => {
+    const actor = OpenAiActor.create(config)
+
+    if (!(actor instanceof OpenAiActorRuntime)) {
+      throw actor
+    }
+
+    actor.setWaitForConfirmation(true)
+    const controller = new AbortController()
+    const pendingConfirmation = actor.beforeRequestMove?.({
+      context: createActorContext(),
+      signal: controller.signal,
+    })
+
+    if (!pendingConfirmation) {
+      throw new Error('OpenAI actor is missing beforeRequestMove')
+    }
+
+    controller.abort(new TurnCancelledError({ side: 'white' }))
+
+    const result = await pendingConfirmation
+    expect(result).toBeInstanceOf(TurnCancelledError)
+    expect(actor.confirmationPending()).toBeNull()
+  })
+
+  it('releases a pending confirmation when waiting is disabled mid-turn', async () => {
+    const actor = OpenAiActor.create(config)
+
+    if (!(actor instanceof OpenAiActorRuntime)) {
+      throw actor
+    }
+
+    actor.setWaitForConfirmation(true)
+    const pendingConfirmation = actor.beforeRequestMove?.({
+      context: createActorContext(),
+      signal: new AbortController().signal,
+    })
+
+    if (!pendingConfirmation) {
+      throw new Error('OpenAI actor is missing beforeRequestMove')
+    }
+
+    await flushMicrotask()
+
+    actor.setWaitForConfirmation(false)
+
+    expect(await pendingConfirmation).toBeNull()
+    expect(actor.waitForConfirmation()).toBe(false)
+    expect(actor.confirmationPending()).toBeNull()
   })
 
   it('retries once after a schema mismatch and returns the legal move', async () => {
@@ -88,7 +198,7 @@ describe('OpenAiActor', () => {
     vi.stubGlobal('fetch', fetchMock)
     const actor = OpenAiActor.create(config)
 
-    if (actor instanceof Error) {
+    if (!(actor instanceof OpenAiActorRuntime)) {
       throw actor
     }
 
@@ -118,7 +228,7 @@ describe('OpenAiActor', () => {
     vi.stubGlobal('fetch', fetchMock)
     const actor = OpenAiActor.create(config)
 
-    if (actor instanceof Error) {
+    if (!(actor instanceof OpenAiActorRuntime)) {
       throw actor
     }
 
@@ -140,7 +250,7 @@ describe('OpenAiActor', () => {
     vi.stubGlobal('fetch', fetchMock)
     const actor = OpenAiActor.create(config)
 
-    if (actor instanceof Error) {
+    if (!(actor instanceof OpenAiActorRuntime)) {
       throw actor
     }
 
@@ -156,7 +266,7 @@ describe('OpenAiActor', () => {
   it('passes the abort signal to the SDK request options', async () => {
     const actor = OpenAiActor.create(config)
 
-    if (actor instanceof Error) {
+    if (!(actor instanceof OpenAiActorRuntime)) {
       throw actor
     }
 

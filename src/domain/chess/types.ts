@@ -65,6 +65,10 @@ export interface ChessEngineFacade {
 }
 
 export interface GameActor {
+  beforeRequestMove?(args: {
+    context: ActorContext
+    signal: AbortSignal
+  }): Promise<ActorRequestError | null>
   requestMove(args: {
     context: ActorContext
     signal: AbortSignal
