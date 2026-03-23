@@ -8,5 +8,4 @@ urlAtom.init()
 afterEach(() => {
   cleanup()
   context.reset()
-  urlAtom.init()
 })

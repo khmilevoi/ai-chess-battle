@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { ActorConfigError } from '../shared/errors'
 import type { Side } from '../domain/chess/types'
+import { OpenAiActor } from './ai-actor/open-ai'
 import { HumanActor } from './human'
-import { OpenAiActor } from './openai'
 import {
   defineActorRegistry,
   type ActorConfigMapFromRegistry,

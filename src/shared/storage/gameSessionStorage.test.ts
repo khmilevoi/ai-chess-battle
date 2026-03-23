@@ -1,45 +1,79 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { peek } from '@reatom/core'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultSideConfig } from '../../actors/registry'
 import {
-  clearStoredGameSession,
-  createStoredGameSession,
-  loadStoredGameSession,
-  replayGameSession,
-  saveStoredGameSession,
-  summarizeStoredGameSession,
+  activeGameIdAtom,
+  clearStoredGameArchive,
+  createStoredGame,
+  replayStoredGameRecord,
+  setActiveGameId,
+  storedGameArchiveAtom,
+  storedGameRecordAtom,
+  storedGameSummariesAtom,
+  storedGamesAtom,
+  summarizeStoredGameRecord,
 } from './gameSessionStorage'
 
-const STORAGE_KEY = 'ai-chess-battle.game-session'
+const GAMES_STORAGE_KEY = 'ai-chess-battle.games'
+
+function createRequiredStoredGame(
+  ...args: Parameters<typeof createStoredGame>
+) {
+  const game = createStoredGame(...args)
+
+  if (game instanceof Error) {
+    throw game
+  }
+
+  return game
+}
 
 describe('gameSessionStorage', () => {
   beforeEach(() => {
-    clearStoredGameSession()
+    clearStoredGameArchive()
     window.localStorage.clear()
   })
 
-  it('returns null when there is no active session', () => {
-    expect(loadStoredGameSession()).toBeNull()
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
-  it('round-trips and replays a stored session', () => {
-    const session = createStoredGameSession({
+  it('starts empty when there are no saved games', () => {
+    expect(peek(storedGamesAtom)).toEqual([])
+    expect(peek(activeGameIdAtom)).toBeNull()
+  })
+
+  it('creates multiple saved games instead of overwriting the previous one', () => {
+    const firstGame = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['e2e4'],
+    })
+    const secondGame = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['d2d4'],
+    })
+
+    expect(peek(storedGamesAtom)).toHaveLength(2)
+    expect(peek(storedGameRecordAtom(firstGame.id))?.moves).toEqual(['e2e4'])
+    expect(peek(storedGameRecordAtom(secondGame.id))?.moves).toEqual(['d2d4'])
+  })
+
+  it('replays and summarizes a saved game record', () => {
+    const game = createRequiredStoredGame({
       config: {
         white: createDefaultSideConfig('human'),
         black: createDefaultSideConfig('human'),
       },
       moves: ['e2e4', 'e7e5', 'g1f3'],
     })
+    const replayed = replayStoredGameRecord(game)
 
-    saveStoredGameSession(session)
-
-    const loaded = loadStoredGameSession()
-    expect(loaded).toEqual(expect.objectContaining({ moves: session.moves }))
-
-    if (loaded === null) {
-      throw new Error('Expected stored session to be available in test.')
-    }
-
-    const replayed = replayGameSession(loaded)
     expect(replayed).not.toBeInstanceOf(Error)
 
     if (replayed instanceof Error) {
@@ -48,34 +82,101 @@ describe('gameSessionStorage', () => {
 
     expect(replayed.snapshot.history).toEqual(['e2e4', 'e7e5', 'g1f3'])
     expect(replayed.snapshot.turn).toBe('black')
-  })
 
-  it('builds a summary for the active session', () => {
-    const summary = summarizeStoredGameSession(
-      createStoredGameSession({
-        config: {
-          white: createDefaultSideConfig('human'),
-          black: createDefaultSideConfig('human'),
-        },
-        moves: ['e2e4', 'e7e5'],
-      }),
-    )
-
+    const summary = summarizeStoredGameRecord(game)
     expect(summary).toEqual(
       expect.objectContaining({
-        moveCount: 2,
-        turn: 'white',
+        id: game.id,
+        moveCount: 3,
+        turn: 'black',
         isFinished: false,
       }),
     )
   })
 
-  it('treats malformed raw session payloads as empty state', async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"version":1,"config":null,"moves":[],"updatedAt":1}')
+  it('sorts summaries by last update time', async () => {
+    const olderGame = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['e2e4'],
+    })
+    const newerGame = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['d2d4'],
+    })
+
+    const olderRecord = peek(storedGameRecordAtom(olderGame.id))
+    const newerRecord = peek(storedGameRecordAtom(newerGame.id))
+
+    if (!olderRecord || !newerRecord) {
+      throw new Error('Expected saved records to be available in test.')
+    }
+
+    olderRecord.updatedAt = 1
+    newerRecord.updatedAt = 2
+    window.localStorage.setItem(
+      GAMES_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        activeGameId: null,
+        games: [olderRecord, newerRecord],
+      }),
+    )
 
     vi.resetModules()
-    const { loadStoredGameSession } = await import('./gameSessionStorage')
+    const { storedGameSummariesAtom } = await import('./gameSessionStorage')
 
-    expect(loadStoredGameSession()).toBeNull()
+    expect(peek(storedGameSummariesAtom).map((game) => game.id)).toEqual([
+      newerGame.id,
+      olderGame.id,
+    ])
+  })
+
+  it('tracks the active unfinished game explicitly', () => {
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+    })
+
+    setActiveGameId(game.id)
+
+    expect(peek(activeGameIdAtom)).toBe(game.id)
+    expect(peek(storedGameSummariesAtom)[0]?.id).toBe(game.id)
+  })
+
+  it('does not rewrite the archive when the active game id is unchanged', () => {
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+    })
+
+    setActiveGameId(game.id)
+
+    const archiveBefore = peek(storedGameArchiveAtom)
+    const setSpy = vi.spyOn(storedGameArchiveAtom, 'set')
+
+    setActiveGameId(game.id)
+
+    expect(setSpy).not.toHaveBeenCalled()
+    expect(peek(storedGameArchiveAtom)).toBe(archiveBefore)
+  })
+
+  it('does not rewrite the archive when clearing an already empty active game id', () => {
+    const archiveBefore = peek(storedGameArchiveAtom)
+    const setSpy = vi.spyOn(storedGameArchiveAtom, 'set')
+
+    setActiveGameId(null)
+
+    expect(setSpy).not.toHaveBeenCalled()
+    expect(peek(storedGameArchiveAtom)).toBe(archiveBefore)
   })
 })

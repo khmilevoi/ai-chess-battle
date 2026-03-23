@@ -42,6 +42,13 @@
   filter: brightness(1.04);
 }
 
+.square:focus-visible {
+  z-index: 1;
+  box-shadow:
+    inset 0 0 0 2px #ffffff,
+    inset 0 0 0 5px #050505;
+}
+
 .light {
   background: linear-gradient(135deg, #f6f6f6 0%, #dedede 100%);
 }

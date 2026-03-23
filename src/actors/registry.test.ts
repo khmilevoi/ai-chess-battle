@@ -4,8 +4,8 @@ import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
   OpenAiActor,
-} from './openai'
-import type { OpenAiActorRuntime } from './openai/model'
+  type OpenAiActorRuntime,
+} from './ai-actor/open-ai'
 import {
   actorRegistry,
   createDefaultSideConfig,

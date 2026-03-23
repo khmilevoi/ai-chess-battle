@@ -1,6 +1,7 @@
-import type { ActorControlsProps } from '../types'
+import type { ActorControlsProps } from '../../types'
 import type { OpenAiActorRuntime } from './model'
-import { reatomMemo } from '../../shared/ui/reatomMemo'
+import { Button } from '../../../shared/ui/Button'
+import { reatomMemo } from '../../../shared/ui/reatomMemo'
 
 export const OpenAiActorControls = reatomMemo(({
   side,
@@ -32,15 +33,14 @@ export const OpenAiActorControls = reatomMemo(({
             : 'The next turn will pause before contacting OpenAI.'
           : 'Requests are sent automatically when the turn starts.'}
       </p>
-      <button
-        type="button"
+      <Button
         disabled={buttonDisabled}
         onClick={() => {
           actor.confirmMoveRequest()
         }}
       >
         Send OpenAI request
-      </button>
+      </Button>
     </div>
   )
 }, 'OpenAiActorControls')

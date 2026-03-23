@@ -1,5 +1,6 @@
+import { peek } from '@reatom/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_OPENAI_REASONING_EFFORT } from '../../actors/openai'
+import { DEFAULT_OPENAI_REASONING_EFFORT } from '../../actors/ai-actor/open-ai'
 import { createDefaultSideConfig } from '../../actors/registry'
 import type { MatchConfig } from '../../actors/registry'
 import {
@@ -7,8 +8,9 @@ import {
   loadStoredActorConfig,
 } from '../../shared/storage/actorConfigStorage'
 import {
-  clearStoredGameSession,
-  loadStoredGameSession,
+  activeGameIdAtom,
+  clearStoredGameArchive,
+  storedGameRecordAtom,
 } from '../../shared/storage/gameSessionStorage'
 import {
   loadStoredMatchConfig,
@@ -30,7 +32,7 @@ describe('createMatchSetupModel', () => {
   beforeEach(() => {
     clearStoredActorConfigMap()
     storedMatchConfig.set(null)
-    clearStoredGameSession()
+    clearStoredGameArchive()
     window.localStorage.clear()
   })
 
@@ -52,10 +54,8 @@ describe('createMatchSetupModel', () => {
     const model = createMatchSetupModel({
       name: `test-setup-${crypto.randomUUID()}`,
       initialConfig: getLoadedConfig(),
-      activeGameSummary: null,
-      startSession: vi.fn(),
       goToGame: vi.fn(),
-      resumeMatch: vi.fn(),
+      goToGames: vi.fn(),
     })
 
     expect(model.whiteSideConfig()).toEqual(storedConfig.white)
@@ -63,7 +63,6 @@ describe('createMatchSetupModel', () => {
   })
 
   it('blocks start when actor config is invalid', async () => {
-    const startSession = vi.fn()
     const goToGame = vi.fn()
     const model = createMatchSetupModel({
       name: `test-setup-${crypto.randomUUID()}`,
@@ -71,10 +70,8 @@ describe('createMatchSetupModel', () => {
         white: createDefaultSideConfig('openai'),
         black: createDefaultSideConfig('human'),
       },
-      activeGameSummary: null,
-      startSession,
       goToGame,
-      resumeMatch: vi.fn(),
+      goToGames: vi.fn(),
     })
 
     const result = await model.startMatch()
@@ -82,13 +79,11 @@ describe('createMatchSetupModel', () => {
     expect(result).toBeInstanceOf(Error)
     expect(model.setupError()).toBeInstanceOf(Error)
     expect(model.canStart()).toBe(false)
-    expect(startSession).not.toHaveBeenCalled()
     expect(goToGame).not.toHaveBeenCalled()
   })
 
-  it('writes storage and starts a session on successful start', async () => {
+  it('creates a saved game and marks it active on successful start', async () => {
     const goToGame = vi.fn()
-    let sessionConfig: MatchConfig | null = null
     const initialConfig: MatchConfig = {
       white: createDefaultSideConfig('human'),
       black: createDefaultSideConfig('human'),
@@ -97,21 +92,22 @@ describe('createMatchSetupModel', () => {
     const model = createMatchSetupModel({
       name: `test-setup-${crypto.randomUUID()}`,
       initialConfig,
-      activeGameSummary: null,
-      startSession: (config) => {
-        sessionConfig = config
-      },
       goToGame,
-      resumeMatch: vi.fn(),
+      goToGames: vi.fn(),
     })
 
     const result = await model.startMatch()
 
     expect(result).toBeNull()
-    expect(sessionConfig).toEqual(initialConfig)
-    expect(goToGame).toHaveBeenCalledTimes(1)
     expect(loadStoredMatchConfig()).toEqual(initialConfig)
-    expect(loadStoredGameSession()).toEqual(
+    expect(goToGame).toHaveBeenCalledTimes(1)
+
+    const activeGameId = peek(activeGameIdAtom)
+    expect(activeGameId).not.toBeNull()
+
+    const activeGame =
+      activeGameId === null ? null : peek(storedGameRecordAtom(activeGameId))
+    expect(activeGame).toEqual(
       expect.objectContaining({
         config: initialConfig,
         moves: [],
@@ -126,10 +122,8 @@ describe('createMatchSetupModel', () => {
         white: createDefaultSideConfig('openai'),
         black: createDefaultSideConfig('openai'),
       },
-      activeGameSummary: null,
-      startSession: vi.fn(),
       goToGame: vi.fn(),
-      resumeMatch: vi.fn(),
+      goToGames: vi.fn(),
     })
 
     model.updateSideConfig('white', {

@@ -1,5 +1,5 @@
-import { ActorConfigError } from '../../shared/errors'
-import { defineActor } from '../types'
+import { ActorConfigError } from '../../../shared/errors'
+import { defineActor } from '../../types'
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
@@ -48,3 +48,4 @@ export type {
   OpenAiReasoningEffort,
   OpenAiReasoningOption,
 } from './config.schema'
+export { OpenAiActorRuntime } from './model'

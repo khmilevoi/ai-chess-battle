@@ -1,5 +1,12 @@
-import type { ComponentType } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type CSSProperties,
+} from 'react'
 import { getRegisteredActor } from '../../actors/registry'
+import { Button } from '../../shared/ui/Button'
 import { Board } from '../board/Board'
 import type { GameModel } from './model'
 import styles from './GamePage.module.css'
@@ -37,65 +44,119 @@ export const GamePage = reatomMemo(({
 }: {
   model: GameModel
 }) => {
+  const boardPanelRef = useRef<HTMLDivElement | null>(null)
+  const historyListRef = useRef<HTMLDivElement | null>(null)
+  const latestMoveElementRef = useRef<HTMLButtonElement | null>(null)
+  const [boardPanelHeight, setBoardPanelHeight] = useState<number | null>(null)
   const snapshot = model.snapshot()
   const phase = model.phase()
   const runtimeError = model.runtimeError()
+  const historyCursor = model.historyCursor()
+  const latestMoveCount = model.latestMoveCount()
+  const previousMoveCountRef = useRef(latestMoveCount)
+  const historyMoves = model.historyMoves()
+  const canGoPrevious = model.canGoPrevious()
+  const canGoNext = model.canGoNext()
+  const isAtLatestMove = model.isAtLatestMove()
   const selectedSquare = model.selectedSquare()
   const selectedLegalMoves = model.selectedLegalMoves()
   const movableSquares = model.movableSquares()
   const statusText = model.statusText()
   const statusView = model.statusView()
-  const historyText = model.historyText()
   const boardInteractive = model.boardInteractive()
   const activeActorControls = model.activeActorControls()
   const hasActiveActorControls =
     activeActorControls !== null &&
     getRegisteredActor(activeActorControls.actorKey).ControlsComponent !== undefined
 
+  useEffect(() => {
+    const boardPanel = boardPanelRef.current
+
+    if (!boardPanel) {
+      return
+    }
+
+    const syncBoardPanelHeight = () => {
+      const nextHeight = Math.round(boardPanel.getBoundingClientRect().height)
+      setBoardPanelHeight(nextHeight > 0 ? nextHeight : null)
+    }
+
+    syncBoardPanelHeight()
+
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+
+    const observer = new ResizeObserver(() => {
+      syncBoardPanelHeight()
+    })
+
+    observer.observe(boardPanel)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
+  useEffect(() => {
+    const previousMoveCount = previousMoveCountRef.current
+    const shouldScrollToLatest =
+      latestMoveCount > previousMoveCount && historyCursor === latestMoveCount
+
+    previousMoveCountRef.current = latestMoveCount
+
+    if (!shouldScrollToLatest) {
+      return
+    }
+
+    const latestMoveElement = latestMoveElementRef.current
+
+    if (latestMoveElement && typeof latestMoveElement.scrollIntoView === 'function') {
+      latestMoveElement.scrollIntoView({
+        block: 'nearest',
+      })
+      return
+    }
+
+    const historyList = historyListRef.current
+
+    if (historyList) {
+      historyList.scrollTop = historyList.scrollHeight
+    }
+  }, [historyCursor, latestMoveCount])
+
+  const pageStyle =
+    boardPanelHeight === null
+      ? undefined
+      : ({ '--board-panel-height': `${boardPanelHeight}px` } as CSSProperties)
+
   if (!snapshot) {
     return (
-      <div className={styles.page}>
-        <div className={styles.errorBox}>No active match.</div>
-        <div className={styles.actions}>
-          <button
-            type="button"
-            onClick={() => {
-              model.leaveMatch()
-            }}
-          >
-            Back to setup
-          </button>
+      <div className={styles.page} style={pageStyle}>
+        <div className={styles.errorBox}>
+          {runtimeError?.message ?? 'Failed to initialize the saved match.'}
         </div>
       </div>
     )
   }
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} style={pageStyle}>
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>Current session</p>
+          <p className={styles.eyebrow}>Saved game</p>
           <h1 className={styles.title}>Live Match</h1>
         </div>
-        <div className={styles.actions}>
-          {phase === 'actorError' ? (
-            <button
-              type="button"
+        <div className={styles.headerActions}>
+          {phase === 'actorError' && statusView.canRetry ? (
+            <Button
               onClick={async () => {
                 await model.retryTurn()
               }}
             >
               Retry turn
-            </button>
+            </Button>
           ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              model.leaveMatch()
-            }}
-          >
-            Back to setup
-          </button>
         </div>
       </header>
 
@@ -125,9 +186,12 @@ export const GamePage = reatomMemo(({
           </div>
           <div className={styles.meta}>
             <span>{statusText}</span>
-            <span>{snapshot.history.length} moves logged</span>
+            <span>
+              move {historyCursor} / {latestMoveCount}
+            </span>
             <span>{snapshot.turn} turn</span>
             {statusView.actorLabel ? <span>{statusView.actorLabel}</span> : null}
+            {!isAtLatestMove ? <span>history view</span> : null}
           </div>
         </div>
         <p className={styles.statusDetail}>{statusView.detail}</p>
@@ -137,7 +201,7 @@ export const GamePage = reatomMemo(({
       </section>
 
       <div className={styles.layout}>
-        <div className={styles.panel}>
+        <div ref={boardPanelRef} className={styles.panel}>
           <h2 className={styles.panelTitle}>Board</h2>
           <Board
             snapshot={snapshot}
@@ -162,8 +226,65 @@ export const GamePage = reatomMemo(({
           <aside className={styles.panel}>
             <h2 className={styles.panelTitle}>Position</h2>
             <div className={styles.monoBlock}>{snapshot.fen}</div>
-            <h2 className={styles.panelTitle}>Move History</h2>
-            <div className={styles.monoBlock}>{historyText}</div>
+          </aside>
+
+          <aside className={[styles.panel, styles.historyPanel].join(' ')}>
+            <div className={styles.historyHeader}>
+              <h2 className={styles.panelTitle}>Move History</h2>
+              <div className={styles.historyActions}>
+                <Button
+                  disabled={!canGoPrevious}
+                  onClick={() => {
+                    model.goToPreviousMove()
+                  }}
+                >
+                  Previous
+                </Button>
+                <Button
+                  disabled={!canGoNext}
+                  onClick={() => {
+                    model.goToNextMove()
+                  }}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+
+            <div ref={historyListRef} className={styles.historyList}>
+              <Button
+                className={[
+                  styles.historyItem,
+                  historyCursor === 0 ? styles.historyItemActive : '',
+                ].join(' ')}
+                onClick={() => {
+                  model.goToMove(0)
+                }}
+              >
+                <span className={styles.historyMoveNumber}>0</span>
+                <span>Initial position</span>
+              </Button>
+              {historyMoves.length === 0 ? (
+                <div className={styles.emptyHistory}>No moves yet.</div>
+              ) : (
+                historyMoves.map((move) => (
+                  <Button
+                    key={`${move.moveNumber}-${move.uci}`}
+                    ref={move.moveNumber === latestMoveCount ? latestMoveElementRef : null}
+                    className={[
+                      styles.historyItem,
+                      move.isCurrent ? styles.historyItemActive : '',
+                    ].join(' ')}
+                    onClick={() => {
+                      model.goToMove(move.moveNumber)
+                    }}
+                  >
+                    <span className={styles.historyMoveNumber}>{move.moveNumber}</span>
+                    <span>{move.uci}</span>
+                  </Button>
+                ))
+              )}
+            </div>
           </aside>
         </div>
       </div>

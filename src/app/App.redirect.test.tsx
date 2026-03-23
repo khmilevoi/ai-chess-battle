@@ -2,9 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { urlAtom } from '@reatom/core'
 import { clearStoredActorConfigMap } from '../shared/storage/actorConfigStorage'
-import { clearStoredGameSession } from '../shared/storage/gameSessionStorage'
+import { clearStoredGameArchive } from '../shared/storage/gameSessionStorage'
 import { storedMatchConfig } from '../shared/storage/matchConfigStorage'
-import { matchSessionConfig } from './model'
 import { setupRoute } from './routes'
 import { App } from './App'
 
@@ -16,15 +15,14 @@ describe('App redirects', () => {
   beforeEach(() => {
     clearStoredActorConfigMap()
     storedMatchConfig.set(null)
-    clearStoredGameSession()
+    clearStoredGameArchive()
     window.localStorage.clear()
-    matchSessionConfig.set(null)
     window.history.replaceState({}, '', '/')
     syncCurrentUrl()
     setupRoute.go(undefined, true)
   })
 
-  it('redirects /game to setup when there is no active session', async () => {
+  it('redirects incomplete /game to /games', async () => {
     window.history.replaceState({}, '', '/game')
     syncCurrentUrl()
 
@@ -32,8 +30,8 @@ describe('App redirects', () => {
     syncCurrentUrl()
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/')
+      expect(window.location.pathname).toBe('/games')
     })
-    await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
+    await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
   })
 })

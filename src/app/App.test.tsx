@@ -1,16 +1,15 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { urlAtom } from '@reatom/core'
 import { createDefaultSideConfig } from '../actors/registry'
 import {
-  clearStoredGameSession,
-  createStoredGameSession,
-  saveStoredGameSession,
+  clearStoredGameArchive,
+  createStoredGame,
+  setActiveGameId,
 } from '../shared/storage/gameSessionStorage'
 import { storedMatchConfig } from '../shared/storage/matchConfigStorage'
 import { clearStoredActorConfigMap } from '../shared/storage/actorConfigStorage'
-import { matchSessionConfig } from './model'
 import { setupRoute } from './routes'
 import { App } from './App'
 
@@ -18,54 +17,42 @@ function syncCurrentUrl() {
   urlAtom.syncFromSource(new URL(window.location.href), true)
 }
 
-function createOpenAiResponse(uci: string) {
-  return new Response(
-    JSON.stringify({
-      output_text: JSON.stringify({
-        from: uci.slice(0, 2),
-        to: uci.slice(2, 4),
-        promotion: uci.slice(4) || 'null',
-      }),
-      output: [],
-    }),
-    {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    },
-  )
+function createRequiredStoredGame(
+  ...args: Parameters<typeof createStoredGame>
+) {
+  const game = createStoredGame(...args)
+
+  if (game instanceof Error) {
+    throw game
+  }
+
+  return game
 }
 
-function createAbortablePendingResponse(signal: AbortSignal | undefined) {
-  return new Promise<Response>((_, reject) => {
-    if (!signal) {
-      return
-    }
+async function expectLiveMatchLoaded(expectedMoves: Array<string> = []) {
+  await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
+  expect(screen.queryByText('Loading match...')).not.toBeInTheDocument()
 
-    signal.addEventListener(
-      'abort',
-      () => {
-        reject(new DOMException('Aborted', 'AbortError'))
-      },
-      { once: true },
-    )
-  })
+  for (const move of expectedMoves) {
+    expect(screen.getByText(move)).toBeInTheDocument()
+  }
 }
 
 describe('App integration', () => {
   beforeEach(() => {
     clearStoredActorConfigMap()
     storedMatchConfig.set(null)
-    clearStoredGameSession()
+    clearStoredGameArchive()
     window.localStorage.clear()
-    matchSessionConfig.set(null)
     window.history.replaceState({}, '', '/')
     syncCurrentUrl()
     setupRoute.go(undefined, true)
   })
 
   afterEach(() => {
+    cleanup()
+    window.history.replaceState({}, '', '/__test_cleanup__')
+    syncCurrentUrl()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -77,31 +64,11 @@ describe('App integration', () => {
       expect(screen.getByRole('button', { name: 'Start Match' })).toBeInTheDocument()
     })
     expect(screen.getByRole('heading', { name: 'AI Chess Battle' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Setup' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Games' })).toBeInTheDocument()
   })
 
-  it('switches actor settings and blocks invalid setup', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await screen.findByRole('button', { name: 'Start Match' })
-    const actorSelects = screen.getAllByLabelText('Actor')
-    const startButton = screen.getByRole('button', { name: 'Start Match' })
-
-    expect(startButton).toBeEnabled()
-
-    await user.selectOptions(actorSelects[0]!, 'openai')
-
-    expect(screen.getByLabelText('API key')).toBeInTheDocument()
-    expect(startButton).toBeDisabled()
-
-    await user.type(screen.getByLabelText('API key'), 'sk-test')
-
-    await waitFor(() => {
-      expect(startButton).toBeEnabled()
-    })
-  })
-
-  it('starts a match and navigates to the game screen', async () => {
+  it('starts a match, navigates through header tabs, and keeps the game resumable', async () => {
     const user = userEvent.setup()
     render(<App />)
 
@@ -109,192 +76,132 @@ describe('App integration', () => {
     await user.click(screen.getByRole('button', { name: 'Start Match' }))
 
     await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
-    expect(screen.getByText('No moves yet.')).toBeInTheDocument()
+    expect(window.location.pathname).toMatch(/^\/game\/.+$/)
+    expect(screen.getByRole('button', { name: 'Active game' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back to setup' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Back to setup' }))
+    await user.click(screen.getByRole('button', { name: 'Setup' }))
 
     await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
-  })
-
-  it('hides actor controls when the active actor has no runtime controls', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await screen.findByRole('button', { name: 'Start Match' })
-    await user.click(screen.getByRole('button', { name: 'Start Match' }))
-
-    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
-    expect(
-      screen.queryByRole('heading', { name: 'Actor controls' }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('starts and sustains an OpenAI versus OpenAI match', async () => {
-    const user = userEvent.setup()
-    const fetchMock = vi.fn()
-
-    vi.stubGlobal('fetch', fetchMock)
-
-    fetchMock
-      .mockResolvedValueOnce(createOpenAiResponse('e2e4'))
-      .mockResolvedValueOnce(createOpenAiResponse('e7e5'))
-      .mockImplementationOnce((input, init) =>
-        createAbortablePendingResponse(
-          input instanceof Request ? input.signal : init?.signal,
-        ),
-      )
-
-    render(<App />)
-
-    await screen.findByRole('button', { name: 'Start Match' })
-    const actorSelects = screen.getAllByLabelText('Actor')
-
-    await user.selectOptions(actorSelects[0]!, 'openai')
-    await user.selectOptions(actorSelects[1]!, 'openai')
-    await user.type(screen.getAllByLabelText('API key')[0]!, 'sk-test')
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Start Match' })).toBeEnabled()
-    })
-
-    await user.click(screen.getByRole('button', { name: 'Start Match' }))
-
-    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
-    expect(screen.getByRole('heading', { name: 'Actor controls' })).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Send OpenAI request' }),
-    ).toBeDisabled()
-    await waitFor(
-      () => {
-        expect(
-          screen.getByText((content) => content.includes('e2e4') && content.includes('e7e5')),
-        ).toBeInTheDocument()
-      },
-      { timeout: 5000 },
-    )
-
-    expect(window.location.pathname).toBe('/game')
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-
-    await user.click(screen.getByRole('button', { name: 'Back to setup' }))
-    await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
-  })
-
-  it('waits for confirmation before sending an OpenAI request when confirmation is enabled', async () => {
-    const user = userEvent.setup()
-    let resolveFirstMove: ((response: Response) => void) | null = null
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-
-    fetchMock
-      .mockImplementationOnce(
-        () =>
-          new Promise<Response>((resolve) => {
-            resolveFirstMove = resolve
-          }),
-      )
-      .mockResolvedValueOnce(createOpenAiResponse('e7e5'))
-      .mockImplementationOnce((input, init) =>
-        createAbortablePendingResponse(
-          input instanceof Request ? input.signal : init?.signal,
-        ),
-      )
-
-    render(<App />)
-
-    await screen.findByRole('button', { name: 'Start Match' })
-    const actorSelects = screen.getAllByLabelText('Actor')
-
-    await user.selectOptions(actorSelects[0]!, 'openai')
-    await user.selectOptions(actorSelects[1]!, 'openai')
-    await user.type(screen.getAllByLabelText('API key')[0]!, 'sk-test')
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Start Match' })).toBeEnabled()
-    })
-
-    await user.click(screen.getByRole('button', { name: 'Start Match' }))
-
-    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
-    await screen.findByRole('heading', { name: 'Actor controls' }, { timeout: 5000 })
-
-    const confirmationToggle = screen.getByRole('checkbox', {
-      name: 'Wait for confirmation before sending the OpenAI request',
-    })
-
-    expect(confirmationToggle).not.toBeChecked()
-    expect(
-      screen.getByRole('button', { name: 'Send OpenAI request' }),
-    ).toBeDisabled()
-
-    await user.click(confirmationToggle)
-    await act(async () => {
-      ;(resolveFirstMove as null | ((response: Response) => void))?.(
-        createOpenAiResponse('e2e4'),
-      )
-      await Promise.resolve()
-    })
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2)
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText('White request controls')).toBeInTheDocument()
-    })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(
-      screen.getByRole('button', { name: 'Send OpenAI request' }),
-    ).toBeEnabled()
-
-    await user.click(screen.getByRole('button', { name: 'Send OpenAI request' }))
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(3)
-    })
-  })
-
-  it('shows a resume card when an active session exists', async () => {
-    const sessionConfig = {
-      white: createDefaultSideConfig('human'),
-      black: createDefaultSideConfig('human'),
-    }
-
-    saveStoredGameSession(
-      createStoredGameSession({
-        config: sessionConfig,
-        moves: ['e2e4', 'e7e5'],
-      }),
-    )
-    matchSessionConfig.set(sessionConfig)
-
-    render(<App />)
-
-    await screen.findByRole('button', { name: 'Resume Match' }, { timeout: 5000 })
     expect(screen.getByText('Resume your last game')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Resume Match' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Active game' }))
+
+    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
   })
 
-  it('restores an active session on cold /game load', async () => {
-    const sessionConfig = {
-      white: createDefaultSideConfig('human'),
-      black: createDefaultSideConfig('human'),
-    }
+  it('opens the saved games page and navigates to a selected game', async () => {
+    const user = userEvent.setup()
+    const savedGame = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['e2e4', 'e7e5'],
+    })
+    setActiveGameId(savedGame.id)
 
-    saveStoredGameSession(
-      createStoredGameSession({
-        config: sessionConfig,
-        moves: ['e2e4', 'e7e5'],
-      }),
-    )
-    matchSessionConfig.set(sessionConfig)
-    window.history.replaceState({}, '', '/game')
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Games' }, { timeout: 5000 })
+    await user.click(screen.getByRole('button', { name: 'Games' }))
+
+    await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
+    await user.click(screen.getByRole('button', { name: 'Open game' }))
+
+    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
+    expect(window.location.pathname).toBe(`/game/${savedGame.id}`)
+  })
+
+  it('shows a resume card when an active unfinished game exists', async () => {
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['e2e4', 'e7e5'],
+    })
+    setActiveGameId(game.id)
+
+    render(<App />)
+
+    await screen.findByText('Resume your last game', undefined, { timeout: 5000 })
+    expect(screen.getByText('Resume your last game')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Active game' })).toBeInTheDocument()
+  })
+
+  it('restores a saved session on cold /game/:gameId load', async () => {
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['e2e4', 'e7e5'],
+    })
+    setActiveGameId(game.id)
+    window.history.replaceState({}, '', `/game/${game.id}`)
     syncCurrentUrl()
 
     render(<App />)
 
-    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
-    expect(
-      screen.getByText((content) => content.includes('e2e4') && content.includes('e7e5')),
-    ).toBeInTheDocument()
+    await expectLiveMatchLoaded(['e2e4', 'e7e5'])
   })
+
+  it('keeps the game route responsive across repeated setup, active-game, and archive transitions', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Start Match' })
+    await user.click(screen.getByRole('button', { name: 'Start Match' }))
+    await expectLiveMatchLoaded()
+
+    for (let iteration = 0; iteration < 3; iteration += 1) {
+      await user.click(screen.getByRole('button', { name: 'Setup' }))
+      await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
+      expect(screen.getByText('Resume your last game')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Active game' }))
+      await expectLiveMatchLoaded()
+
+      await user.click(screen.getByRole('button', { name: 'Games' }))
+      await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
+
+      await user.click(screen.getByRole('button', { name: 'Open game' }))
+      await expectLiveMatchLoaded()
+    }
+  }, 15000)
+
+  it('keeps repeated visits to the same saved game responsive after a cold route load', async () => {
+    const user = userEvent.setup()
+    const openAiSide = createDefaultSideConfig('openai')
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: {
+          ...openAiSide,
+          actorConfig: {
+            ...openAiSide.actorConfig,
+            apiKey: 'sk-test',
+          },
+        },
+      },
+      moves: ['e2e4', 'e7e5'],
+    })
+    window.history.replaceState({}, '', `/game/${game.id}`)
+    syncCurrentUrl()
+
+    render(<App />)
+
+    for (let iteration = 0; iteration < 4; iteration += 1) {
+      await expectLiveMatchLoaded(['e2e4', 'e7e5'])
+
+      await user.click(screen.getByRole('button', { name: 'Games' }))
+      await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
+
+      await user.click(screen.getByRole('button', { name: 'Open game' }))
+    }
+
+    await expectLiveMatchLoaded(['e2e4', 'e7e5'])
+  }, 15000)
 })

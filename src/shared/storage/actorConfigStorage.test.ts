@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_OPENAI_REASONING_EFFORT } from '../../actors/openai'
+import { DEFAULT_OPENAI_REASONING_EFFORT } from '../../actors/ai-actor/open-ai'
 import { createDefaultSideConfig } from '../../actors/registry'
 import { clearStoredActorConfigMap, loadStoredActorConfig, saveStoredActorConfig } from './actorConfigStorage'
 

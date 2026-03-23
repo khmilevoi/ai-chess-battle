@@ -1,10 +1,10 @@
-import type { ActorSettingsProps } from '../types'
+import type { ActorSettingsProps } from '../../types'
 import {
   OPENAI_MODEL_OPTIONS,
   OPENAI_REASONING_OPTIONS,
   type OpenAiActorConfig,
 } from './config.schema'
-import { reatomMemo } from '../../shared/ui/reatomMemo'
+import { reatomMemo } from '../../../shared/ui/reatomMemo'
 
 const FieldErrorList = reatomMemo(({
   errors,

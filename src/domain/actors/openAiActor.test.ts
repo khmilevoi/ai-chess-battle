@@ -7,14 +7,15 @@ import {
   OpenAiTransportError,
   TurnCancelledError,
 } from '../../shared/errors'
+import { AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS } from '../../actors/ai-actor'
 import { createChessEngine } from '../chess/createChessEngine'
 import type { ActorContext } from '../chess/types'
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
   OpenAiActor,
-} from '../../actors/openai'
-import { OpenAiActorRuntime } from '../../actors/openai/model'
+  OpenAiActorRuntime,
+} from '../../actors/ai-actor/open-ai'
 
 function createActorContext(): ActorContext {
   const engine = createChessEngine()
@@ -216,15 +217,15 @@ describe('OpenAiActor', () => {
     expect(result.uci).toBe('e2e4')
   })
 
-  it('retries once and then returns an illegal move error when the move stays invalid', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
+  it('retries until the global attempt limit and then returns the invalid move error', async () => {
+    const fetchMock = vi.fn()
+
+    for (let attempt = 0; attempt < AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS; attempt += 1) {
+      fetchMock.mockResolvedValueOnce(
         createSuccessResponse('{"from":"e2","to":"e5","promotion":"null"}'),
       )
-      .mockResolvedValueOnce(
-        createSuccessResponse('{"from":"e2","to":"e5","promotion":"null"}'),
-      )
+    }
+
     vi.stubGlobal('fetch', fetchMock)
     const actor = OpenAiActor.create(config)
 
@@ -237,8 +238,71 @@ describe('OpenAiActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS)
     expect(result).toBeInstanceOf(IllegalMoveError)
+  })
+
+  it('passes the accumulated error stack in repeated sdk requests', async () => {
+    const actor = OpenAiActor.create(config)
+
+    if (!(actor instanceof OpenAiActorRuntime)) {
+      throw actor
+    }
+
+    const client = Reflect.get(actor, 'client') as OpenAI
+    const createMock = vi
+      .spyOn(client.responses, 'create')
+      .mockResolvedValueOnce({
+        output_text: '{"from":"e2","to":"e5","promotion":"null"}',
+        output: [],
+      } as unknown as OpenAiResponse)
+      .mockResolvedValueOnce({
+        output_text: '{"from":"e2","to":"e5","promotion":"null"}',
+        output: [],
+      } as unknown as OpenAiResponse)
+      .mockResolvedValueOnce({
+        output_text: '{"from":"e2","to":"e4","promotion":"null"}',
+        output: [],
+      } as unknown as OpenAiResponse)
+
+    const result = await actor.requestMove({
+      context: createActorContext(),
+      signal: new AbortController().signal,
+    })
+
+    expect(result).not.toBeInstanceOf(Error)
+    expect(createMock).toHaveBeenCalledTimes(3)
+
+    const firstInput = JSON.parse(createMock.mock.calls[0][0].input as string) as {
+      errorStack: Array<{ index: number; name: string; message: string }>
+    }
+    const secondInput = JSON.parse(createMock.mock.calls[1][0].input as string) as {
+      errorStack: Array<{ index: number; name: string; message: string }>
+    }
+    const thirdInput = JSON.parse(createMock.mock.calls[2][0].input as string) as {
+      errorStack: Array<{ index: number; name: string; message: string }>
+    }
+
+    expect(firstInput.errorStack).toEqual([])
+    expect(secondInput.errorStack).toEqual([
+      {
+        index: 1,
+        name: 'IllegalMoveError',
+        message: 'Illegal move e2e5',
+      },
+    ])
+    expect(thirdInput.errorStack).toEqual([
+      {
+        index: 1,
+        name: 'IllegalMoveError',
+        message: 'Illegal move e2e5',
+      },
+      {
+        index: 2,
+        name: 'IllegalMoveError',
+        message: 'Illegal move e2e5',
+      },
+    ])
   })
 
   it('returns http errors without retrying', async () => {

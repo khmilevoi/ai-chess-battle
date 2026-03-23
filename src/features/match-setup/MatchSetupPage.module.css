@@ -35,7 +35,7 @@
 
 .resumeCard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: center;
   padding: 20px 24px;
@@ -93,7 +93,6 @@
   color: #ffffff;
 }
 
-.darkPanel button,
 .darkPanel input,
 .darkPanel select {
   background: #050505;
@@ -155,24 +154,6 @@
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
-}
-
-.primaryAction {
-  min-width: 220px;
-  min-height: 52px;
-  padding: 0 18px;
-  font-family: var(--font-display);
-  font-size: 1.1rem;
-}
-
-.secondaryAction {
-  min-width: 220px;
-  min-height: 52px;
-  padding: 0 18px;
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-  background: #050505;
-  color: #ffffff;
 }
 
 .inlineError {

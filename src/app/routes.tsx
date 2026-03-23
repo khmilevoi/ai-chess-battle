@@ -1,9 +1,10 @@
 import * as errore from 'errore'
-import { abortVar, action, effect, reatomRoute, urlAtom } from '@reatom/core'
+import { effect, peek, reatomRoute, urlAtom } from '@reatom/core'
 import { Children, Fragment, type ReactNode } from 'react'
-import { matchSessionConfig } from './model'
 import { MatchSetupPage } from '../features/match-setup/MatchSetupPage'
 import { createMatchSetupModel } from '../features/match-setup/model'
+import { GamesPage } from '../features/games/GamesPage'
+import { createGamesModel } from '../features/games/model'
 import { GamePage } from '../features/game/GamePage'
 import { createGameModel } from '../features/game/model'
 import {
@@ -11,10 +12,13 @@ import {
   readStoredMatchConfig,
 } from '../shared/storage/matchConfigStorage'
 import {
-  clearStoredGameSession,
-  readStoredGameSession,
-  summarizeStoredGameSession,
+  activeGameIdAtom,
+  activeStoredGameSummaryAtom,
+  readStoredGameRecord,
+  readStoredGameSummary,
+  setActiveGameId,
 } from '../shared/storage/gameSessionStorage'
+import { Button } from '../shared/ui/Button'
 import styles from './App.module.css'
 
 function renderOutletChildren(outlet: () => ReactNode) {
@@ -26,15 +30,60 @@ function renderOutletChildren(outlet: () => ReactNode) {
 export const rootRoute = reatomRoute({
   render({ outlet }) {
     const content = renderOutletChildren(outlet)
+    const pathname = urlAtom().pathname
+    const activeGameSummary = activeStoredGameSummaryAtom()
 
     return (
       <div className={styles.shell}>
         <div className={styles.content}>
           <header className={styles.masthead}>
             <div className={styles.brand}>
-              <p className={styles.tagline}>React / Reatom / chess.js / errore</p>
               <h1 className={styles.name}>AI Chess Battle</h1>
             </div>
+            <nav className={styles.nav} aria-label="Primary">
+              <Button
+                className={[
+                  styles.navButton,
+                  pathname === '/' ? styles.navButtonActive : '',
+                ].join(' ')}
+                aria-current={pathname === '/' ? 'page' : undefined}
+                onClick={() => {
+                  setupRoute.go(undefined, true)
+                }}
+              >
+                Setup
+              </Button>
+              <Button
+                className={[
+                  styles.navButton,
+                  pathname === '/games' ? styles.navButtonActive : '',
+                ].join(' ')}
+                aria-current={pathname === '/games' ? 'page' : undefined}
+                onClick={() => {
+                  gamesRoute.go(undefined, true)
+                }}
+              >
+                Games
+              </Button>
+              {activeGameSummary ? (
+                <Button
+                  className={[
+                    styles.navButton,
+                    pathname === `/game/${activeGameSummary.id}`
+                      ? styles.navButtonActive
+                      : '',
+                  ].join(' ')}
+                  aria-current={
+                    pathname === `/game/${activeGameSummary.id}` ? 'page' : undefined
+                  }
+                  onClick={() => {
+                    gameRoute.go({ gameId: activeGameSummary.id }, true)
+                  }}
+                >
+                  Active game
+                </Button>
+              ) : null}
+            </nav>
           </header>
           {(content?.length ?? 0) > 0 ? (
             content
@@ -51,41 +100,25 @@ export const setupRoute = rootRoute.reatomRoute({
   path: '',
   exactRender: true,
   async loader() {
-    const loadedConfig = readStoredMatchConfig()
-    const storedGameSession = readStoredGameSession()
-    const initialConfig = loadedConfig === null ? fallbackMatchConfig() : loadedConfig
-    const activeGameSummary = (() => {
-      if (storedGameSession === null) {
-        return null
-      }
+    const activeGameId = peek(activeGameIdAtom)
+    const activeGameSummary = peek(activeStoredGameSummaryAtom)
 
-      const summary = summarizeStoredGameSession(storedGameSession)
+    if (activeGameId !== null && activeGameSummary === null) {
+      setActiveGameId(null)
+    }
 
-      if (!(summary instanceof Error)) {
-        return summary
-      }
+    const initialConfig = readStoredMatchConfig() ?? fallbackMatchConfig()
 
-      console.warn(summary)
-      clearStoredGameSession()
-      matchSessionConfig.set(null)
-
-      return null
-    })()
-
-    const model = createMatchSetupModel({
+    return createMatchSetupModel({
       name: 'setupRoute.model',
       initialConfig,
-      activeGameSummary,
-      startSession: (config) => matchSessionConfig.set(config),
-      goToGame: (config) => {
-        gameRoute.go({ config }, true)
+      goToGame: (gameId) => {
+        gameRoute.go({ gameId }, true)
       },
-      resumeMatch: (config) => {
-        matchSessionConfig.set(config)
-        gameRoute.go({ config }, true)
+      goToGames: () => {
+        gamesRoute.go(undefined, true)
       },
     })
-    return model
   },
   render(self) {
     if (!self.loader.ready()) {
@@ -102,61 +135,70 @@ export const setupRoute = rootRoute.reatomRoute({
   },
 }, 'routes.setup')
 
-const sessionRoute = rootRoute.reatomRoute({
-  params() {
-    const config = matchSessionConfig()
-    
-    if (config) {
-      return { config }
-    }
-
-    if (!setupRoute.match()) {
-      setupRoute.go(undefined, true)
-    }
-
-    return null
-  },
-  render({ outlet }) {
-    return <>{renderOutletChildren(outlet)}</>
-  },
-}, 'routes.session')
-
-export const gameRoute = sessionRoute.reatomRoute({
-  path: 'game',
+export const gamesRoute = rootRoute.reatomRoute({
+  path: 'games',
   exactRender: true,
-  async loader({ config }) {
+  async loader() {
+    return createGamesModel({
+      goToGame: (gameId) => {
+        gameRoute.go({ gameId }, true)
+      },
+      goToSetup: () => {
+        setupRoute.go(undefined, true)
+      },
+    })
+  },
+  render(self) {
+    if (!self.loader.ready()) {
+      return <div>Loading games...</div>
+    }
+
+    const model = self.loader.data()
+
+    if (!model) {
+      return <div>Loading games...</div>
+    }
+
+    return <GamesPage model={model} />
+  },
+}, 'routes.games')
+
+export const gameRoute = rootRoute.reatomRoute({
+  path: 'game/:gameId',
+  exactRender: true,
+  async loader({ gameId }) {
     try {
-      const storedGameSession = readStoredGameSession()
-      const initialSession = storedGameSession === null ? null : storedGameSession
+      const record = readStoredGameRecord(gameId)
+
+      if (record === null) {
+        gamesRoute.go(undefined, true)
+        return null
+      }
+
+      const summary = readStoredGameSummary(gameId)
+
+      if (summary === null) {
+        if (peek(activeGameIdAtom) === gameId) {
+          setActiveGameId(null)
+        }
+        gamesRoute.go(undefined, true)
+        return null
+      }
+
+      if (!summary.isFinished) {
+        setActiveGameId(gameId)
+      }
+
       const model = createGameModel({
         name: 'gameRoute.model',
-        config,
-        initialSession,
+        gameId,
+        startOnConnect: true,
         leaveToSetup: () => {
-          matchSessionConfig.set(null)
           setupRoute.go(undefined, true)
         },
-      })
-
-      const cleanup = action(() => {
-        model.dispose()
-        return null
-      }, 'routes.game.cleanup')
-
-      abortVar.subscribe(() => {
-        abortVar.spawn(cleanup)
-      })
-
-      void model.startMatch().then((startResult) => {
-        if (!(startResult instanceof Error)) {
-          return
-        }
-
-        console.warn(startResult)
-        clearStoredGameSession()
-        matchSessionConfig.set(null)
-        cleanup()
-        setupRoute.go(undefined, true)
+        leaveToGames: () => {
+          gamesRoute.go(undefined, true)
+        },
       })
 
       return model
@@ -171,7 +213,12 @@ export const gameRoute = sessionRoute.reatomRoute({
   render(self) {
     const model = self.loader.data()
 
-    if (model == null || model.snapshot() === null) {
+    if (
+      model == null ||
+      (model.snapshot() === null &&
+        model.phase() === 'pending' &&
+        model.runtimeError() === null)
+    ) {
       return <div>Loading match...</div>
     }
 
@@ -186,9 +233,5 @@ effect(() => {
     return
   }
 
-  if (matchSessionConfig() !== null) {
-    return
-  }
-
-  setupRoute.go(undefined, true)
-}, 'routes.redirectMissingGameSession')
+  gamesRoute.go(undefined, true)
+}, 'routes.redirectIncompleteGamePath')

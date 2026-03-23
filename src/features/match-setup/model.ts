@@ -1,5 +1,4 @@
 import { action, atom, computed } from '@reatom/core'
-import { matchSessionConfig } from '../../app/model'
 import { ActorError } from '../../shared/errors'
 import {
   createDefaultSideConfig,
@@ -17,20 +16,15 @@ import {
   saveStoredActorConfig,
 } from '../../shared/storage/actorConfigStorage'
 import {
-  createStoredGameSession,
-  loadStoredGameSession,
-  saveStoredGameSession,
-  summarizeStoredGameSession,
-  type StoredGameSessionSummary,
+  activeStoredGameSummaryAtom,
+  createStoredGame,
 } from '../../shared/storage/gameSessionStorage'
 
 type CreateMatchSetupModelOptions = {
   name: string
   initialConfig: MatchConfig
-  activeGameSummary: StoredGameSessionSummary | null
-  startSession: (config: MatchConfig) => void
-  goToGame: (config: MatchConfig) => void
-  resumeMatch: (config: MatchConfig) => void
+  goToGame: (gameId: string) => void
+  goToGames: () => void
 }
 
 function hydrateSharedActorConfig<K extends ActorKey>(
@@ -57,10 +51,8 @@ function syncSharedActorConfig<K extends ActorKey>(
 export function createMatchSetupModel({
   name,
   initialConfig,
-  activeGameSummary: initialActiveGameSummary,
-  startSession,
   goToGame,
-  resumeMatch,
+  goToGames,
 }: CreateMatchSetupModelOptions) {
   const whiteSideConfig = atom<MatchSideConfig>(
     hydrateSharedActorConfig(initialConfig.white),
@@ -93,10 +85,7 @@ export function createMatchSetupModel({
       black: black.config,
     } satisfies MatchConfig
   }, `${name}.readyConfig`)
-  const canStart = computed(
-    () => readyConfig() !== null,
-    `${name}.canStart`,
-  )
+  const canStart = computed(() => readyConfig() !== null, `${name}.canStart`)
   const whiteActorDefinition = computed(
     () => getRegisteredActor(whiteSideConfig().actorKey),
     `${name}.whiteActorDefinition`,
@@ -105,28 +94,10 @@ export function createMatchSetupModel({
     () => getRegisteredActor(blackSideConfig().actorKey),
     `${name}.blackActorDefinition`,
   )
-  const activeGameSummary = computed(() => {
-    const activeSessionConfig = matchSessionConfig()
-
-    if (activeSessionConfig === null) {
-      return initialActiveGameSummary
-    }
-
-    const storedGameSession = loadStoredGameSession()
-
-    if (storedGameSession === null) {
-      return null
-    }
-
-    const summary = summarizeStoredGameSession(storedGameSession)
-
-    if (summary instanceof Error) {
-      console.warn(summary)
-      return null
-    }
-
-    return summary
-  }, `${name}.activeGameSummary`)
+  const activeGameSummary = computed(
+    () => activeStoredGameSummaryAtom(),
+    `${name}.activeGameSummary`,
+  )
 
   const setSideActor = action((side: Side, actorKey: ActorKey) => {
     const next = hydrateSharedActorConfig(createDefaultSideConfig(actorKey))
@@ -206,14 +177,17 @@ export function createMatchSetupModel({
     syncSharedActorConfig(matchConfig.white)
     syncSharedActorConfig(matchConfig.black)
 
-    saveStoredGameSession(
-      createStoredGameSession({
-        config: matchConfig,
-      }),
-    )
+    const game = createStoredGame({
+      config: matchConfig,
+      makeActive: true,
+    })
 
-    startSession(matchConfig)
-    goToGame(matchConfig)
+    if (game instanceof Error) {
+      setupError.set(game)
+      return game
+    }
+
+    goToGame(game.id)
 
     return null
   }, `${name}.startMatch`)
@@ -226,10 +200,14 @@ export function createMatchSetupModel({
     }
 
     setupError.set(null)
-    startSession(summary.config)
-    resumeMatch(summary.config)
-    return summary.config
+    goToGame(summary.id)
+    return summary.id
   }, `${name}.resumeActiveMatch`)
+
+  const openGames = action(() => {
+    goToGames()
+    return null
+  }, `${name}.openGames`)
 
   return {
     availableActors: listRegisteredActors(),
@@ -247,6 +225,7 @@ export function createMatchSetupModel({
     updateSideConfig,
     startMatch,
     resumeActiveMatch,
+    openGames,
   }
 }
 

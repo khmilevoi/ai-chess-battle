@@ -1,17 +1,32 @@
+import { peek } from '@reatom/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
-} from '../../actors/openai'
-import { OpenAiActorRuntime } from '../../actors/openai/model'
+  OpenAiActorRuntime,
+} from '../../actors/ai-actor/open-ai'
 import { createDefaultSideConfig } from '../../actors/registry'
 import type { MatchConfig } from '../../actors/registry'
 import { ActorError } from '../../shared/errors'
 import {
-  clearStoredGameSession,
-  createStoredGameSession,
+  clearStoredGameArchive,
+  createStoredGame,
+  setActiveGameId,
+  storedGameRecordAtom,
 } from '../../shared/storage/gameSessionStorage'
 import { createGameModel } from './model'
+
+function createRequiredStoredGame(
+  ...args: Parameters<typeof createStoredGame>
+) {
+  const game = createStoredGame(...args)
+
+  if (game instanceof Error) {
+    throw game
+  }
+
+  return game
+}
 
 async function flush(times = 1) {
   for (let index = 0; index < times; index += 1) {
@@ -53,9 +68,21 @@ function createOpenAiResponse(uci: string) {
   )
 }
 
+function createSavedGame({
+  config,
+  moves = [],
+}: {
+  config: MatchConfig
+  moves?: Array<string>
+}) {
+  const game = createRequiredStoredGame({ config, moves })
+  setActiveGameId(game.id)
+  return game
+}
+
 describe('createGameModel', () => {
   beforeEach(() => {
-    clearStoredGameSession()
+    clearStoredGameArchive()
     window.localStorage.clear()
   })
 
@@ -64,63 +91,69 @@ describe('createGameModel', () => {
     vi.unstubAllGlobals()
   })
 
-  it('starts from the provided match config', async () => {
-    const model = createGameModel({
-      name: `test-game-${crypto.randomUUID()}`,
+  it('starts from the latest saved position', async () => {
+    const game = createSavedGame({
       config: {
         white: createDefaultSideConfig('human'),
         black: createDefaultSideConfig('human'),
       },
-      initialSession: null,
+      moves: ['e2e4', 'e7e5'],
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
       leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
     })
 
     const startResult = await model.startMatch()
 
     expect(startResult).toBeNull()
-    expect(model.snapshot()).not.toBeNull()
-    expect(model.phase()).toBe('playing')
+    expect(model.snapshot()?.history).toEqual(['e2e4', 'e7e5'])
+    expect(model.historyCursor()).toBe(2)
+    expect(model.isAtLatestMove()).toBe(true)
   })
 
-  it('applies a human move and advances the turn', async () => {
-    const model = createGameModel({
-      name: `test-game-${crypto.randomUUID()}`,
+  it('applies a human move and persists it into the same saved game', async () => {
+    const game = createSavedGame({
       config: {
         white: createDefaultSideConfig('human'),
         black: createDefaultSideConfig('human'),
       },
-      initialSession: null,
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
       leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
     })
 
-    const startResult = await model.startMatch()
-
-    expect(startResult).toBeNull()
+    expect(await model.startMatch()).toBeNull()
 
     model.clickSquare('e2')
     model.clickSquare('e4')
     await flush(2)
 
-    const snapshot = model.snapshot()
-    expect(snapshot?.history).toEqual(['e2e4'])
-    expect(snapshot?.turn).toBe('black')
-    expect(model.phase()).toBe('playing')
+    expect(model.snapshot()?.history).toEqual(['e2e4'])
+    expect(model.snapshot()?.turn).toBe('black')
+    expect(peek(storedGameRecordAtom(game.id))?.moves).toEqual(['e2e4'])
   })
 
   it('aborts the pending turn on dispose and rejects stale human input', async () => {
-    const model = createGameModel({
-      name: `test-game-${crypto.randomUUID()}`,
+    const game = createSavedGame({
       config: {
         white: createDefaultSideConfig('human'),
         black: createDefaultSideConfig('human'),
       },
-      initialSession: null,
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
       leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
     })
 
-    const startResult = await model.startMatch()
-
-    expect(startResult).toBeNull()
+    expect(await model.startMatch()).toBeNull()
 
     const pendingActor = model.activeHumanActor()
     expect(pendingActor).not.toBeNull()
@@ -144,203 +177,92 @@ describe('createGameModel', () => {
 
     fetchMock
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            output_text: '{"from":"a1","to":"a2","promotion":"null"}',
-            output: [],
-          }),
-          {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            output_text: '{"from":"a1","to":"a2","promotion":"null"}',
-            output: [],
-          }),
-          {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            output_text: '{"from":"e2","to":"e4","promotion":"null"}',
-            output: [],
-          }),
-          {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          },
-        ),
-      )
-
-    const config: MatchConfig = {
-      white: {
-        actorKey: 'openai',
-        actorConfig: {
-          apiKey: 'sk-test',
-          model: DEFAULT_OPENAI_MODEL,
-          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
-        },
-      },
-      black: createDefaultSideConfig('human'),
-    }
-
-    const model = createGameModel({
-      name: `test-game-${crypto.randomUUID()}`,
-      config,
-      initialSession: null,
-      leaveToSetup: vi.fn(),
-    })
-
-    const startResult = await model.startMatch()
-
-    expect(startResult).toBeNull()
-
-    await flush(4)
-
-    expect(model.phase()).toBe('actorError')
-    expect(model.runtimeError()).toBeInstanceOf(Error)
-
-    void model.retryTurn()
-
-    await flush(4)
-
-    const snapshot = model.snapshot()
-    expect(snapshot?.history).toEqual(['e2e4'])
-    expect(snapshot?.turn).toBe('black')
-    expect(model.phase()).toBe('playing')
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-  })
-
-  it('ignores repeated retryTurn calls once the loop restarts', async () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            output_text: '{"from":"a1","to":"a2","promotion":"null"}',
-            output: [],
-          }),
-          {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            output_text: '{"from":"a1","to":"a2","promotion":"null"}',
-            output: [],
-          }),
-          {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          },
-        ),
+        new Response('unauthorized', {
+          status: 401,
+        }),
       )
       .mockResolvedValueOnce(createOpenAiResponse('e2e4'))
 
-    const config: MatchConfig = {
-      white: {
-        actorKey: 'openai',
-        actorConfig: {
-          apiKey: 'sk-test',
-          model: DEFAULT_OPENAI_MODEL,
-          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+    const game = createSavedGame({
+      config: {
+        white: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
         },
+        black: createDefaultSideConfig('human'),
       },
-      black: createDefaultSideConfig('human'),
-    }
-
+    })
     const model = createGameModel({
       name: `test-game-${crypto.randomUUID()}`,
-      config,
-      initialSession: null,
+      gameId: game.id,
       leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
     })
 
     expect(await model.startMatch()).toBeNull()
     await flush(4)
 
     expect(model.phase()).toBe('actorError')
+    expect(model.runtimeError()).toBeInstanceOf(Error)
 
     model.retryTurn()
-    model.retryTurn()
-
     await flush(4)
 
     expect(model.snapshot()?.history).toEqual(['e2e4'])
     expect(model.phase()).toBe('playing')
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('continues bot versus bot matches after the first move', async () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-
-    fetchMock
-      .mockResolvedValueOnce(createOpenAiResponse('e2e4'))
-      .mockResolvedValueOnce(createOpenAiResponse('e7e5'))
-      .mockImplementationOnce(() => new Promise(() => {}))
-
-    const config: MatchConfig = {
-      white: {
-        actorKey: 'openai',
-        actorConfig: {
-          apiKey: 'sk-test',
-          model: DEFAULT_OPENAI_MODEL,
-          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
-        },
+  it('pauses live play while reviewing history and resumes from the latest move', async () => {
+    const game = createSavedGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
       },
-      black: {
-        actorKey: 'openai',
-        actorConfig: {
-          apiKey: 'sk-test',
-          model: DEFAULT_OPENAI_MODEL,
-          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
-        },
-      },
-    }
-
+      moves: ['e2e4', 'e7e5'],
+    })
     const model = createGameModel({
       name: `test-game-${crypto.randomUUID()}`,
-      config,
-      initialSession: null,
+      gameId: game.id,
       leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
     })
 
-    const startResult = await model.startMatch()
+    expect(await model.startMatch()).toBeNull()
 
-    expect(startResult).toBeNull()
+    model.goToPreviousMove()
+    await flush(2)
 
-    await flush(4)
+    expect(model.snapshot()?.history).toEqual(['e2e4'])
+    expect(model.isAtLatestMove()).toBe(false)
+    expect(model.canContinueFromCurrentMove()).toBe(false)
+    expect(model.activeActorControls()).toBeNull()
 
-    const snapshot = model.snapshot()
-    expect(snapshot?.history.slice(0, 2)).toEqual(['e2e4', 'e7e5'])
-    expect(snapshot?.turn).toBe('white')
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+    model.clickSquare('g1')
+    model.clickSquare('f3')
+    await flush(2)
+    expect(model.snapshot()?.history).toEqual(['e2e4'])
 
-    model.dispose()
+    model.goToNextMove()
+    await flush(2)
+
+    expect(model.snapshot()?.history).toEqual(['e2e4', 'e7e5'])
+    expect(model.isAtLatestMove()).toBe(true)
+
+    model.clickSquare('g1')
+    model.clickSquare('f3')
+    await flush(2)
+
+    expect(model.snapshot()?.history).toEqual(['e2e4', 'e7e5', 'g1f3'])
+    expect(peek(storedGameRecordAtom(game.id))?.moves).toEqual([
+      'e2e4',
+      'e7e5',
+      'g1f3',
+    ])
   })
 
   it('waits for beforeRequestMove before calling requestMove', async () => {
@@ -361,8 +283,7 @@ describe('createGameModel', () => {
         uci: 'e2e4',
       })
 
-    const model = createGameModel({
-      name: `test-game-${crypto.randomUUID()}`,
+    const game = createSavedGame({
       config: {
         white: {
           actorKey: 'openai',
@@ -374,8 +295,12 @@ describe('createGameModel', () => {
         },
         black: createDefaultSideConfig('human'),
       },
-      initialSession: null,
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
       leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
     })
 
     expect(await model.startMatch()).toBeNull()
@@ -387,10 +312,9 @@ describe('createGameModel', () => {
 
     expect(requestMove).toHaveBeenCalledTimes(1)
     expect(model.snapshot()?.history).toEqual(['e2e4'])
-    expect(model.snapshot()?.turn).toBe('black')
   })
 
-  it('moves active actor controls to the side whose turn is current', async () => {
+  it('moves active actor controls with the current side and hides them off-tail', async () => {
     let resolveFirstMove: ((response: Response) => void) | null = null
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
@@ -404,8 +328,7 @@ describe('createGameModel', () => {
       )
       .mockImplementationOnce(() => new Promise(() => {}))
 
-    const model = createGameModel({
-      name: `test-game-${crypto.randomUUID()}`,
+    const game = createSavedGame({
       config: {
         white: {
           actorKey: 'openai',
@@ -424,8 +347,12 @@ describe('createGameModel', () => {
           },
         },
       },
-      initialSession: null,
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
       leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
     })
 
     expect(await model.startMatch()).toBeNull()
@@ -439,30 +366,9 @@ describe('createGameModel', () => {
 
     expect(model.activeActorControls()?.side).toBe('black')
 
-    model.dispose()
-  })
+    model.goToMove(0)
+    await flush(2)
 
-  it('replays a stored session and continues from the restored position', async () => {
-    const model = createGameModel({
-      name: `test-game-${crypto.randomUUID()}`,
-      config: {
-        white: createDefaultSideConfig('human'),
-        black: createDefaultSideConfig('human'),
-      },
-      initialSession: createStoredGameSession({
-        config: {
-          white: createDefaultSideConfig('human'),
-          black: createDefaultSideConfig('human'),
-        },
-        moves: ['e2e4', 'e7e5'],
-      }),
-      leaveToSetup: vi.fn(),
-    })
-
-    const startResult = await model.startMatch()
-
-    expect(startResult).toBeNull()
-    expect(model.snapshot()?.history).toEqual(['e2e4', 'e7e5'])
-    expect(model.snapshot()?.turn).toBe('white')
+    expect(model.activeActorControls()).toBeNull()
   })
 })

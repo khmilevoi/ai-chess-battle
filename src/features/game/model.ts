@@ -4,9 +4,11 @@ import {
   action,
   atom,
   computed,
+  peek,
   reatomEnum,
   withAbort,
   withAsync,
+  withConnectHook,
   wrap,
 } from '@reatom/core'
 import { getRegisteredActor } from '../../actors/registry'
@@ -15,19 +17,24 @@ import type {
   MatchConfig,
   MatchSideConfig,
 } from '../../actors/registry'
-import { createChessEngine } from '../../domain/chess/createChessEngine'
 import {
   isTerminalStatus,
   toUciMove,
   type ActorContext,
-  type GameActor,
   type ActorMove,
   type BoardSnapshot,
   type ChessEngineFacade,
+  type GameActor,
   type Square,
 } from '../../domain/chess/types'
-import { clearStoredGameSession, replayGameSession, saveStoredGameSession, type StoredGameSession } from '../../shared/storage/gameSessionStorage'
-import { TurnCancelledError } from '../../shared/errors'
+import {
+  activeGameIdAtom,
+  replayStoredGameRecord,
+  saveStoredGameRecord,
+  setActiveGameId,
+  storedGameRecordAtom,
+} from '../../shared/storage/gameSessionStorage'
+import { StorageError, TurnCancelledError } from '../../shared/errors'
 
 type SideActors = Record<
   BoardSnapshot['turn'],
@@ -43,6 +50,12 @@ type ActiveActorState = {
   actor: ActorModel
 }
 
+type HistoryMove = {
+  moveNumber: number
+  uci: string
+  isCurrent: boolean
+}
+
 type GameStatusTone = 'neutral' | 'warning' | 'error' | 'success'
 
 export type GameStatusView = {
@@ -56,9 +69,10 @@ export type GameStatusView = {
 
 type CreateGameModelOptions = {
   name: string
-  config: MatchConfig
-  initialSession: StoredGameSession | null
+  gameId: string
   leaveToSetup: () => void
+  leaveToGames: () => void
+  startOnConnect?: boolean
 }
 
 function buildActorContext(
@@ -153,15 +167,24 @@ function createSideActors(config: MatchConfig): SideActors | Error {
   }
 }
 
+function createMissingGameError(gameId: string): StorageError {
+  return new StorageError({
+    message: `Saved game "${gameId}" was not found.`,
+  })
+}
+
 export function createGameModel({
   name,
-  config,
-  initialSession,
+  gameId,
   leaveToSetup,
+  leaveToGames,
+  startOnConnect = false,
 }: CreateGameModelOptions) {
+  const storedGame = storedGameRecordAtom(gameId)
   const engine = atom<ChessEngineFacade | null>(null, `${name}.engine`)
   const snapshot = atom<BoardSnapshot | null>(null, `${name}.snapshot`)
   const actors = atom<SideActors | null>(null, `${name}.actors`)
+  const historyCursor = atom(0, `${name}.historyCursor`)
   const selectedSquare = atom<Square | null>(null, `${name}.selectedSquare`)
   const runtimeError = atom<Error | null>(null, `${name}.runtimeError`)
   const turnActivity = reatomEnum(['idle', 'awaitingActor', 'applyingMove'], {
@@ -173,54 +196,45 @@ export function createGameModel({
     initState: 'pending',
   })
 
-  const persistSnapshot = action((nextSnapshot: BoardSnapshot) => {
-    saveStoredGameSession({
-      version: 1,
-      config,
-      moves: nextSnapshot.history,
-      updatedAt: Date.now(),
-    })
-    return null
-  }, `${name}.persistSnapshot`)
-
-  const resetState = action(() => {
+  const latestMoveCount = computed(
+    () => storedGame()?.moves.length ?? 0,
+    `${name}.latestMoveCount`,
+  )
+  const isAtLatestMove = computed(
+    () => historyCursor() === latestMoveCount(),
+    `${name}.isAtLatestMove`,
+  )
+  const canGoPrevious = computed(
+    () => historyCursor() > 0,
+    `${name}.canGoPrevious`,
+  )
+  const canGoNext = computed(
+    () => historyCursor() < latestMoveCount(),
+    `${name}.canGoNext`,
+  )
+  const canContinueFromCurrentMove = computed(() => {
     const currentSnapshot = snapshot()
 
-    runMatchLoop.abort(
-      new TurnCancelledError({
-        side: currentSnapshot?.turn ?? 'white',
-      }),
+    return (
+      currentSnapshot !== null &&
+      isAtLatestMove() &&
+      !isTerminalStatus(currentSnapshot.status)
     )
-    engine.set(null)
-    actors.set(null)
-    snapshot.set(null)
-    selectedSquare.set(null)
-    runtimeError.set(null)
-    turnActivity.setIdle()
-    phase.setPending()
-    return null
-  }, `${name}.resetState`)
+  }, `${name}.canContinueFromCurrentMove`)
+  const historyMoves = computed(() => {
+    const currentGame = storedGame()
+    const cursor = historyCursor()
 
-  const movableSquares = computed(() => {
-    const currentEngine = engine()
-    const currentSnapshot = snapshot()
-
-    if (!currentEngine || !currentSnapshot) {
-      return [] as Array<Square>
+    if (!currentGame) {
+      return [] as Array<HistoryMove>
     }
 
-    return currentEngine.getMovablePieces(currentSnapshot.turn)
-  }, `${name}.movableSquares`)
-  const selectedLegalMoves = computed(() => {
-    const currentEngine = engine()
-    const square = selectedSquare()
-
-    if (!currentEngine || square === null) {
-      return [] as Array<Square>
-    }
-
-    return currentEngine.getLegalMoves(square)
-  }, `${name}.selectedLegalMoves`)
+    return currentGame.moves.map((uci, index) => ({
+      moveNumber: index + 1,
+      uci,
+      isCurrent: cursor === index + 1,
+    }))
+  }, `${name}.historyMoves`)
   const activeActorState = computed(() => {
     const currentSnapshot = snapshot()
     const currentActors = actors()
@@ -245,7 +259,7 @@ export function createGameModel({
     return currentActorState.actor
   }, `${name}.activeHumanActor`)
   const activeActorControls = computed(() => {
-    if (phase() === 'pending' || phase() === 'gameOver') {
+    if (!canContinueFromCurrentMove() || phase() === 'pending') {
       return null
     }
 
@@ -269,17 +283,9 @@ export function createGameModel({
 
     return formatStatus(currentSnapshot)
   }, `${name}.statusText`)
-  const historyText = computed(() => {
-    const currentSnapshot = snapshot()
-
-    if (!currentSnapshot || currentSnapshot.history.length === 0) {
-      return 'No moves yet.'
-    }
-
-    return currentSnapshot.history.join('\n')
-  }, `${name}.historyText`)
   const boardInteractive = computed(() => {
     return (
+      canContinueFromCurrentMove() &&
       phase() === 'playing' &&
       turnActivity() === 'awaitingActor' &&
       activeHumanActor() !== null
@@ -292,6 +298,8 @@ export function createGameModel({
     const currentActorLabel = activeActorLabel()
     const currentHumanActor = activeHumanActor()
     const currentTurnActivity = turnActivity()
+    const cursor = historyCursor()
+    const latest = latestMoveCount()
 
     if (!currentSnapshot || currentPhase === 'pending') {
       return {
@@ -304,6 +312,20 @@ export function createGameModel({
       } satisfies GameStatusView
     }
 
+    if (!isAtLatestMove()) {
+      return {
+        title: 'Reviewing history',
+        detail:
+          latest === 0
+            ? 'You are viewing the initial position. Return to the latest move to continue the game.'
+            : `You are viewing move ${cursor} of ${latest}. Return to the latest move to continue the game.`,
+        tone: 'neutral',
+        busy: false,
+        actorLabel: currentActorLabel,
+        canRetry: false,
+      } satisfies GameStatusView
+    }
+
     if (currentPhase === 'actorError') {
       return {
         title: 'Turn failed',
@@ -311,7 +333,7 @@ export function createGameModel({
         tone: 'error',
         busy: false,
         actorLabel: currentActorLabel,
-        canRetry: true,
+        canRetry: canContinueFromCurrentMove(),
       } satisfies GameStatusView
     }
 
@@ -380,6 +402,133 @@ export function createGameModel({
     } satisfies GameStatusView
   }, `${name}.statusView`)
 
+  const stopLiveLoop = action(() => {
+    const currentSnapshot = snapshot()
+
+    runMatchLoop.abort(
+      new TurnCancelledError({
+        side: currentSnapshot?.turn ?? 'white',
+      }),
+    )
+    turnActivity.setIdle()
+    selectedSquare.set(null)
+    return null
+  }, `${name}.stopLiveLoop`)
+
+  const resetState = action(() => {
+    stopLiveLoop()
+    engine.set(null)
+    actors.set(null)
+    snapshot.set(null)
+    historyCursor.set(0)
+    selectedSquare.set(null)
+    runtimeError.set(null)
+    phase.setPending()
+    return null
+  }, `${name}.resetState`)
+
+  const syncPositionFromHistory = action((targetCursor?: number) => {
+    const currentGame = storedGame()
+
+    if (currentGame === null) {
+      const error = createMissingGameError(gameId)
+      runtimeError.set(error)
+      phase.setActorError()
+      return error
+    }
+
+    const nextCursor =
+      targetCursor === undefined
+        ? historyCursor()
+        : Math.min(Math.max(targetCursor, 0), currentGame.moves.length)
+    const replayed = replayStoredGameRecord(currentGame, { moveCount: nextCursor })
+
+    if (replayed instanceof Error) {
+      runtimeError.set(replayed)
+      phase.setActorError()
+      return replayed
+    }
+
+    engine.set(replayed.engine)
+    snapshot.set(replayed.snapshot)
+    historyCursor.set(nextCursor)
+    selectedSquare.set(null)
+    runtimeError.set(null)
+    turnActivity.setIdle()
+
+    if (isTerminalStatus(replayed.snapshot.status)) {
+      phase.setGameOver()
+
+      if (peek(activeGameIdAtom) === gameId) {
+        setActiveGameId(null)
+      }
+
+      return replayed.snapshot
+    }
+
+    phase.setPlaying()
+    return replayed.snapshot
+  }, `${name}.syncPositionFromHistory`)
+
+  const persistSnapshot = action((nextSnapshot: BoardSnapshot) => {
+    const currentGame = peek(storedGameRecordAtom(gameId))
+
+    if (currentGame === null) {
+      return createMissingGameError(gameId)
+    }
+
+    const persisted = saveStoredGameRecord({
+      ...currentGame,
+      moves: nextSnapshot.history,
+      updatedAt: Date.now(),
+    })
+
+    if (persisted === null) {
+      return new StorageError({
+        message: `Failed to persist saved game "${gameId}".`,
+      })
+    }
+
+    if (isTerminalStatus(nextSnapshot.status)) {
+      if (peek(activeGameIdAtom) === gameId) {
+        setActiveGameId(null)
+      }
+    } else {
+      setActiveGameId(gameId)
+    }
+
+    return persisted
+  }, `${name}.persistSnapshot`)
+
+  const movableSquares = computed(() => {
+    const currentEngine = engine()
+    const currentSnapshot = snapshot()
+
+    if (
+      !currentEngine ||
+      !currentSnapshot ||
+      !canContinueFromCurrentMove()
+    ) {
+      return [] as Array<Square>
+    }
+
+    return currentEngine.getMovablePieces(currentSnapshot.turn)
+  }, `${name}.movableSquares`)
+  const selectedLegalMoves = computed(() => {
+    const currentEngine = engine()
+    const square = selectedSquare()
+
+    if (
+      !currentEngine ||
+      square === null ||
+      !canContinueFromCurrentMove()
+    ) {
+      return [] as Array<Square>
+    }
+
+    return currentEngine.getLegalMoves(square)
+  }, `${name}.selectedLegalMoves`)
+
   const handleTurnFailure = (error: Error) => {
     turnActivity.setIdle()
 
@@ -391,12 +540,18 @@ export function createGameModel({
     phase.setActorError()
     return error
   }
+
   const requestCurrentActorMove = async () => {
     const currentEngine = engine()
     const currentSnapshot = snapshot()
     const currentActorState = activeActorState()
 
-    if (!currentEngine || !currentSnapshot || !currentActorState) {
+    if (
+      !currentEngine ||
+      !currentSnapshot ||
+      !currentActorState ||
+      !canContinueFromCurrentMove()
+    ) {
       return null
     }
 
@@ -431,11 +586,16 @@ export function createGameModel({
       }),
     )
   }
+
   const applyResolvedMove = (move: ActorMove) => {
     const currentEngine = engine()
     const currentSnapshot = snapshot()
 
-    if (!currentEngine || !currentSnapshot) {
+    if (
+      !currentEngine ||
+      !currentSnapshot ||
+      !canContinueFromCurrentMove()
+    ) {
       return null
     }
 
@@ -448,10 +608,16 @@ export function createGameModel({
     }
 
     snapshot.set(nextSnapshot)
+    historyCursor.set(nextSnapshot.history.length)
     selectedSquare.set(null)
     runtimeError.set(null)
     turnActivity.setIdle()
-    persistSnapshot(nextSnapshot)
+
+    const persisted = persistSnapshot(nextSnapshot)
+
+    if (persisted instanceof Error) {
+      return persisted
+    }
 
     if (isTerminalStatus(nextSnapshot.status)) {
       phase.setGameOver()
@@ -461,12 +627,18 @@ export function createGameModel({
     phase.setPlaying()
     return nextSnapshot
   }
+
   const playSingleTurn = async () => {
     const currentEngine = engine()
     const currentActors = actors()
     const currentSnapshot = snapshot()
 
-    if (!currentEngine || !currentActors || !currentSnapshot) {
+    if (
+      !currentEngine ||
+      !currentActors ||
+      !currentSnapshot ||
+      !canContinueFromCurrentMove()
+    ) {
       return null
     }
 
@@ -507,13 +679,12 @@ export function createGameModel({
 
     return nextSnapshot
   }
+
   const runMatchLoop = action(async () => {
-    while (phase() === 'playing') {
-      const currentEngine = engine()
-      const currentActors = actors()
+    while (phase() === 'playing' && isAtLatestMove()) {
       const currentSnapshot = snapshot()
 
-      if (!currentEngine || !currentActors || !currentSnapshot) {
+      if (currentSnapshot === null || !canContinueFromCurrentMove()) {
         return null
       }
 
@@ -552,7 +723,16 @@ export function createGameModel({
   const startMatch = action(async () => {
     resetState()
 
-    const nextActors = createSideActors(config)
+    const currentGame = peek(storedGameRecordAtom(gameId))
+
+    if (currentGame === null) {
+      const error = createMissingGameError(gameId)
+      runtimeError.set(error)
+      phase.setActorError()
+      return error
+    }
+
+    const nextActors = createSideActors(currentGame.config)
 
     if (nextActors instanceof Error) {
       runtimeError.set(nextActors)
@@ -560,38 +740,14 @@ export function createGameModel({
       return nextActors
     }
 
-    const restoredState = (() => {
-      if (initialSession === null) {
-        const nextEngine = createChessEngine()
+    actors.set(nextActors)
+    const restoredSnapshot = syncPositionFromHistory(currentGame.moves.length)
 
-        if (nextEngine instanceof Error) {
-          return nextEngine
-        }
-
-        return {
-          engine: nextEngine,
-          snapshot: nextEngine.getBoardSnapshot(),
-        }
-      }
-
-      return replayGameSession(initialSession)
-    })()
-
-    if (restoredState instanceof Error) {
-      runtimeError.set(restoredState)
-      phase.setActorError()
-      return restoredState
+    if (restoredSnapshot instanceof Error) {
+      return restoredSnapshot
     }
 
-    engine.set(restoredState.engine)
-    actors.set(nextActors)
-    snapshot.set(restoredState.snapshot)
-    selectedSquare.set(null)
-    runtimeError.set(null)
-    turnActivity.setIdle()
-    persistSnapshot(restoredState.snapshot)
-
-    if (isTerminalStatus(restoredState.snapshot.status)) {
+    if (isTerminalStatus(restoredSnapshot.status)) {
       phase.setGameOver()
       return null
     }
@@ -602,9 +758,7 @@ export function createGameModel({
   }, `${name}.startMatch`)
 
   const retryTurn = action(() => {
-    const currentSnapshot = snapshot()
-
-    if (!currentSnapshot || phase() !== 'actorError') {
+    if (phase() !== 'actorError' || !canContinueFromCurrentMove()) {
       return null
     }
 
@@ -615,12 +769,53 @@ export function createGameModel({
     return null
   }, `${name}.retryTurn`)
 
+  const goToMove = action((nextCursor: number) => {
+    stopLiveLoop()
+    const syncedSnapshot = syncPositionFromHistory(nextCursor)
+
+    if (syncedSnapshot instanceof Error) {
+      return syncedSnapshot
+    }
+
+    if (
+      nextCursor === latestMoveCount() &&
+      !isTerminalStatus(syncedSnapshot.status)
+    ) {
+      phase.setPlaying()
+      void runMatchLoop()
+    }
+
+    return nextCursor
+  }, `${name}.goToMove`)
+
+  const goToPreviousMove = action(() => {
+    if (!canGoPrevious()) {
+      return historyCursor()
+    }
+
+    return goToMove(historyCursor() - 1)
+  }, `${name}.goToPreviousMove`)
+
+  const goToNextMove = action(() => {
+    if (!canGoNext()) {
+      return historyCursor()
+    }
+
+    return goToMove(historyCursor() + 1)
+  }, `${name}.goToNextMove`)
+
   const clickSquare = action((square: Square) => {
     const currentSnapshot = snapshot()
     const currentEngine = engine()
     const humanActor = activeHumanActor()
 
-    if (!currentSnapshot || !currentEngine || !humanActor || phase() !== 'playing') {
+    if (
+      !currentSnapshot ||
+      !currentEngine ||
+      !humanActor ||
+      phase() !== 'playing' ||
+      !canContinueFromCurrentMove()
+    ) {
       return null
     }
 
@@ -663,22 +858,57 @@ export function createGameModel({
 
   const leaveMatch = action(() => {
     resetState()
-    clearStoredGameSession()
     leaveToSetup()
     return null
   }, `${name}.leaveMatch`)
+
+  const openGames = action(() => {
+    resetState()
+    leaveToGames()
+    return null
+  }, `${name}.openGames`)
 
   const dispose = action(() => {
     resetState()
     return null
   }, `${name}.dispose`)
 
+  if (startOnConnect) {
+    snapshot.extend(withConnectHook(async () => {
+      let cleaned = false
+      const cleanupOnce = () => {
+        if (cleaned) {
+          return
+        }
+
+        cleaned = true
+        dispose()
+      }
+
+      const startResult = await wrap(startMatch())
+
+      if (startResult instanceof Error) {
+        console.warn(startResult)
+      }
+
+      return cleanupOnce
+    }))
+  }
+
   return {
-    config,
+    gameId,
+    storedGame,
     engine,
     snapshot,
     phase,
     runtimeError,
+    historyCursor,
+    latestMoveCount,
+    historyMoves,
+    canGoPrevious,
+    canGoNext,
+    isAtLatestMove,
+    canContinueFromCurrentMove,
     selectedSquare,
     selectedLegalMoves,
     movableSquares,
@@ -686,12 +916,15 @@ export function createGameModel({
     activeHumanActor,
     statusText,
     statusView,
-    historyText,
     boardInteractive,
     startMatch,
     retryTurn,
+    goToMove,
+    goToPreviousMove,
+    goToNextMove,
     clickSquare,
     leaveMatch,
+    openGames,
     dispose,
   }
 }
