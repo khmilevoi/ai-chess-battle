@@ -544,6 +544,76 @@ describe('createGameModel', () => {
     })
   })
 
+  it('continues the same pending turn when confirmation is disabled mid-request', async () => {
+    const pendingResponses: Array<(response: Response) => void> = []
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          pendingResponses.push(resolve)
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const game = createSavedGame({
+      config: {
+        white: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+        black: createDefaultSideConfig('human'),
+      },
+      actorControls: {
+        openai: {
+          waitForConfirmation: true,
+        },
+      },
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+
+    const actor = model.actorPanels()[0]?.actor
+
+    expect(actor).toBeInstanceOf(OpenAiActorRuntime)
+
+    if (!(actor instanceof OpenAiActorRuntime)) {
+      throw new Error('Expected OpenAI actor panel to expose OpenAiActorRuntime.')
+    }
+
+    expect(actor.waitForConfirmation()).toBe(true)
+    expect(actor.confirmationPending()).toEqual({
+      params: { side: 'white' },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    actor.setWaitForConfirmation(false)
+
+    await waitForCondition(() => fetchMock.mock.calls.length === 1)
+
+    expect(actor.waitForConfirmation()).toBe(false)
+    expect(actor.confirmationPending()).toBeNull()
+    expect(pendingResponses).toHaveLength(1)
+
+    pendingResponses[0]?.(createOpenAiResponse('e2e4'))
+
+    await waitForCondition(() => model.snapshot()?.history.length === 1)
+
+    expect(model.snapshot()?.history).toEqual(['e2e4'])
+    expect(model.snapshot()?.turn).toBe('black')
+    expect(model.phase()).toBe('playing')
+    expect(model.runtimeError()).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('rehydrates persisted shared confirmation state for the same saved game', async () => {
     const game = createSavedGame({
       config: {

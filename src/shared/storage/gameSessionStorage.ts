@@ -282,9 +282,15 @@ const legacyStoredGameSessionAtom = atom<LegacyStoredGameSession | null>(
   }),
 )
 
-function migrateLegacyStoredGameSession(): void {
-  const archive = storedGameArchiveAtom()
-  const legacySession = legacyStoredGameSessionAtom()
+function migrateLegacyStoredGameSession({
+  readArchive,
+  readLegacySession,
+}: {
+  readArchive: () => StoredGameArchive
+  readLegacySession: () => LegacyStoredGameSession | null
+}): void {
+  const archive = readArchive()
+  const legacySession = readLegacySession()
 
   if (legacySession === null) {
     return
@@ -299,15 +305,31 @@ function migrateLegacyStoredGameSession(): void {
   legacyStoredGameSessionAtom.set(null)
 }
 
-migrateLegacyStoredGameSession()
+function migrateLegacyStoredGameSessionReactive(): void {
+  migrateLegacyStoredGameSession({
+    readArchive: () => storedGameArchiveAtom(),
+    readLegacySession: () => legacyStoredGameSessionAtom(),
+  })
+}
+
+function migrateLegacyStoredGameSessionNonReactive(): void {
+  migrateLegacyStoredGameSession({
+    readArchive: () => peek(storedGameArchiveAtom),
+    readLegacySession: () => peek(legacyStoredGameSessionAtom),
+  })
+}
+
+migrateLegacyStoredGameSessionNonReactive()
 
 function loadGameArchive(): StoredGameArchive {
-  migrateLegacyStoredGameSession()
+  migrateLegacyStoredGameSessionReactive()
   return storedGameArchiveAtom()
 }
 
 function readGameArchive(): StoredGameArchive {
-  migrateLegacyStoredGameSession()
+  // Imperative reads are used from route loaders and must not subscribe
+  // those loaders to archive writes.
+  migrateLegacyStoredGameSessionNonReactive()
   return peek(storedGameArchiveAtom)
 }
 

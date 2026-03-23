@@ -1,16 +1,21 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { urlAtom } from '@reatom/core'
+import { peek, urlAtom } from '@reatom/core'
+import {
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_REASONING_EFFORT,
+} from '../actors/ai-actor/open-ai'
 import { createDefaultSideConfig } from '../actors/registry'
 import {
   clearStoredGameArchive,
   createStoredGame,
   setActiveGameId,
+  storedGameRecordAtom,
 } from '../shared/storage/gameSessionStorage'
 import { storedMatchConfig } from '../shared/storage/matchConfigStorage'
 import { clearStoredActorConfigMap } from '../shared/storage/actorConfigStorage'
-import { setupRoute } from './routes'
+import { gameRoute, setupRoute } from './routes'
 import { App } from './App'
 
 function syncCurrentUrl() {
@@ -27,6 +32,36 @@ function createRequiredStoredGame(
   }
 
   return game
+}
+
+function createOpenAiSide() {
+  return {
+    actorKey: 'openai' as const,
+    actorConfig: {
+      apiKey: 'sk-test',
+      model: DEFAULT_OPENAI_MODEL,
+      reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+    },
+  }
+}
+
+function createOpenAiResponse(uci: string) {
+  return new Response(
+    JSON.stringify({
+      output_text: JSON.stringify({
+        from: uci.slice(0, 2),
+        to: uci.slice(2, 4),
+        promotion: uci.slice(4) || 'null',
+      }),
+      output: [],
+    }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+  )
 }
 
 async function expectLiveMatchLoaded(expectedMoves: Array<string> = []) {
@@ -146,6 +181,77 @@ describe('App integration', () => {
     render(<App />)
 
     await expectLiveMatchLoaded(['e2e4', 'e7e5'])
+  })
+
+  it('keeps the same game-route model while persisting confirmation controls on the live page', async () => {
+    const user = userEvent.setup()
+    const pendingResponses: Array<(response: Response) => void> = []
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          pendingResponses.push(resolve)
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const game = createRequiredStoredGame({
+      config: {
+        white: createOpenAiSide(),
+        black: createDefaultSideConfig('human'),
+      },
+      actorControls: {
+        openai: {
+          waitForConfirmation: true,
+        },
+      },
+    })
+    setActiveGameId(game.id)
+    window.history.replaceState({}, '', `/game/${game.id}`)
+    syncCurrentUrl()
+
+    render(<App />)
+
+    await expectLiveMatchLoaded()
+    await waitFor(() => {
+      expect(gameRoute.loader.data()).not.toBeNull()
+    })
+
+    const initialModel = gameRoute.loader.data()
+
+    if (initialModel === null) {
+      throw new Error('Expected the game route loader to expose a live model.')
+    }
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: /Wait for confirmation before sending the OpenAI request/i,
+    })
+
+    expect(checkbox).toBeChecked()
+    expect(screen.getByText('White is waiting for your approval.')).toBeInTheDocument()
+
+    await user.click(checkbox)
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(pendingResponses).toHaveLength(1)
+    expect(gameRoute.loader.data()).toBe(initialModel)
+    expect(
+      screen.getByRole('checkbox', {
+        name: /Wait for confirmation before sending the OpenAI request/i,
+      }),
+    ).not.toBeChecked()
+    expect(peek(storedGameRecordAtom(game.id))?.actorControls).toEqual({
+      openai: {
+        waitForConfirmation: false,
+      },
+    })
+
+    pendingResponses[0]?.(createOpenAiResponse('e2e4'))
+
+    await expectLiveMatchLoaded(['e2e4'])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(gameRoute.loader.data()).toBe(initialModel)
   })
 
   it('keeps the game route responsive across repeated setup, active-game, and archive transitions', async () => {
