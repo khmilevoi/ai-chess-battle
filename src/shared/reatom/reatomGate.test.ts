@@ -1,22 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { reatomGate } from './reatomGate'
-
-let gateId = 0
+import { named } from '@reatom/core'
+import {
+  ReatomGateAbortError,
+  ReatomGateConcurrentSpawnError,
+  ReatomGateMissingPendingSendError,
+  reatomGate,
+} from './reatomGate'
 
 function createTestGate() {
-  return reatomGate<string | Error, string>({
-    name: `testGate#${++gateId}`,
-    mapAbort: ({ params, reason }) =>
-      new Error(`aborted:${params}:${String(reason ?? 'unknown')}`),
-    mapConcurrentSpawn: ({ params, pending }) =>
-      new Error(`concurrent:${pending.params}->${params}`),
-    mapMissingPendingSend: ({ value }) => new Error(`missing:${value}`),
-  })
+  const name = named('testGate')
+  return {
+    name,
+    gate: reatomGate<string, string>({ name }),
+  }
 }
 
 describe('reatomGate', () => {
   it('resolves spawned waiter and clears pending state after send', async () => {
-    const gate = createTestGate()
+    const { gate } = createTestGate()
     const pendingResult = gate.spawn({ params: 'white' })
 
     expect(gate.isPending()).toBe(true)
@@ -28,7 +29,7 @@ describe('reatomGate', () => {
   })
 
   it('maps abort results and clears pending state', async () => {
-    const gate = createTestGate()
+    const { gate, name } = createTestGate()
     const controller = new AbortController()
     const pendingResult = gate.spawn({
       params: 'black',
@@ -38,10 +39,12 @@ describe('reatomGate', () => {
     controller.abort('cancelled')
 
     const result = await pendingResult
-    expect(result).toBeInstanceOf(Error)
+    expect(result).toBeInstanceOf(ReatomGateAbortError)
 
-    if (result instanceof Error) {
-      expect(result.message).toBe('aborted:black:cancelled')
+    if (result instanceof ReatomGateAbortError) {
+      expect(result.gateName).toBe(name)
+      expect(result.params).toBe('black')
+      expect(result.cause).toBe('cancelled')
     }
 
     expect(gate.isPending()).toBe(false)
@@ -49,14 +52,16 @@ describe('reatomGate', () => {
   })
 
   it('rejects concurrent spawn without disturbing the original waiter', async () => {
-    const gate = createTestGate()
+    const { gate, name } = createTestGate()
     const firstWaiter = gate.spawn({ params: 'white' })
     const secondWaiter = await gate.spawn({ params: 'black' })
 
-    expect(secondWaiter).toBeInstanceOf(Error)
+    expect(secondWaiter).toBeInstanceOf(ReatomGateConcurrentSpawnError)
 
-    if (secondWaiter instanceof Error) {
-      expect(secondWaiter.message).toBe('concurrent:white->black')
+    if (secondWaiter instanceof ReatomGateConcurrentSpawnError) {
+      expect(secondWaiter.gateName).toBe(name)
+      expect(secondWaiter.params).toBe('black')
+      expect(secondWaiter.pendingParams).toBe('white')
     }
 
     expect(gate.pending()).toEqual({ params: 'white' })
@@ -66,13 +71,13 @@ describe('reatomGate', () => {
   })
 
   it('returns an error when send is called without a pending waiter', () => {
-    const gate = createTestGate()
+    const { gate, name } = createTestGate()
     const result = gate.send('e2e4')
 
-    expect(result).toBeInstanceOf(Error)
+    expect(result).toBeInstanceOf(ReatomGateMissingPendingSendError)
 
-    if (result instanceof Error) {
-      expect(result.message).toBe('missing:e2e4')
+    if (result instanceof ReatomGateMissingPendingSendError) {
+      expect(result.gateName).toBe(name)
     }
   })
 })

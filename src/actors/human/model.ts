@@ -1,13 +1,16 @@
 import {
   ActorError,
   TurnCancelledError,
-  type ActorRequestError,
 } from '../../shared/errors'
 import type { ActorMove, Side } from '../../domain/chess/types'
-import { reatomGate } from '../../shared/reatom/reatomGate'
+import { named } from '@reatom/core'
+import {
+  ReatomGateAbortError,
+  ReatomGateConcurrentSpawnError,
+  ReatomGateMissingPendingSendError,
+  reatomGate,
+} from '../../shared/reatom/reatomGate'
 import type { InteractiveActor } from '../types'
-
-let humanActorRuntimeId = 0
 
 function toTurnCancelledError(
   side: Parameters<InteractiveActor['requestMove']>[0]['context']['side'],
@@ -24,18 +27,7 @@ function toTurnCancelledError(
 }
 
 function createMoveGate(name: string) {
-  return reatomGate<ActorMove | ActorRequestError, { side: Side }, ActorError>({
-    name,
-    mapAbort: ({ params, reason }) => toTurnCancelledError(params.side, reason),
-    mapConcurrentSpawn: () =>
-      new ActorError({
-        message: 'Human actor is already waiting for a move.',
-      }),
-    mapMissingPendingSend: () =>
-      new ActorError({
-        message: 'Human actor does not have a pending move request.',
-      }),
-  })
+  return reatomGate<ActorMove, { side: Side }>({ name })
 }
 
 export class HumanActorRuntime implements InteractiveActor {
@@ -43,7 +35,7 @@ export class HumanActorRuntime implements InteractiveActor {
 
   private readonly moveGate: ReturnType<typeof createMoveGate>
 
-  constructor(name = `humanActorRuntime#${++humanActorRuntimeId}`) {
+  constructor(name: string = named('humanActorRuntime')) {
     this.moveGate = createMoveGate(`${name}.moveGate`)
   }
 
@@ -51,13 +43,35 @@ export class HumanActorRuntime implements InteractiveActor {
     context,
     signal,
   }: Parameters<InteractiveActor['requestMove']>[0]) {
-    return await this.moveGate.spawn({
+    const result = await this.moveGate.spawn({
       signal,
       params: { side: context.side },
     })
+
+    if (result instanceof ReatomGateAbortError) {
+      return toTurnCancelledError(context.side, result)
+    }
+
+    if (result instanceof ReatomGateConcurrentSpawnError) {
+      return new ActorError({
+        message: 'Human actor is already waiting for a move.',
+        cause: result,
+      })
+    }
+
+    return result
   }
 
   submitMove(move: ActorMove): ActorError | null {
-    return this.moveGate.send(move)
+    const result = this.moveGate.send(move)
+
+    if (result instanceof ReatomGateMissingPendingSendError) {
+      return new ActorError({
+        message: 'Human actor does not have a pending move request.',
+        cause: result,
+      })
+    }
+
+    return null
   }
 }

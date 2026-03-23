@@ -1,3 +1,4 @@
+import * as errore from 'errore'
 import { action, atom, computed } from '@reatom/core'
 
 type ReatomGateSpawnArgs<TParams> = [TParams] extends [void]
@@ -16,24 +17,73 @@ type PendingWaiter<TResult, TParams> = {
   cleanup: () => void
 }
 
-export function reatomGate<
-  TResult,
-  TParams = void,
-  TSendError extends Error = Error,
->({
-  name,
-  mapAbort,
-  mapConcurrentSpawn,
-  mapMissingPendingSend,
-}: {
-  name: string
-  mapAbort: (args: { params: TParams; reason: unknown }) => TResult
-  mapConcurrentSpawn: (args: {
+export class ReatomGateBaseError extends Error {
+  readonly gateName: string
+
+  constructor(message: string, { gateName, cause }: { gateName: string; cause?: unknown }) {
+    super(message, { cause })
+    this.name = new.target.name
+    this.gateName = gateName
+    Object.setPrototypeOf(this, new.target.prototype)
+  }
+}
+
+export class ReatomGateError extends ReatomGateBaseError {}
+
+export class ReatomGateAbortError<TParams = unknown> extends errore.AbortError {
+  readonly gateName: string
+  readonly params: TParams
+
+  constructor({
+    gateName,
+    params,
+    cause,
+  }: {
+    gateName: string
     params: TParams
-    pending: { params: TParams }
-  }) => TResult
-  mapMissingPendingSend: (args: { value: TResult }) => TSendError
-}) {
+    cause?: unknown
+  }) {
+    super(`Reatom gate "${gateName}" was aborted`, { cause })
+    this.name = new.target.name
+    this.gateName = gateName
+    this.params = params
+    Object.setPrototypeOf(this, new.target.prototype)
+  }
+}
+
+export class ReatomGateConcurrentSpawnError<TParams = unknown> extends ReatomGateError {
+  readonly params: TParams
+  readonly pendingParams: TParams
+
+  constructor({
+    gateName,
+    params,
+    pendingParams,
+  }: {
+    gateName: string
+    params: TParams
+    pendingParams: TParams
+  }) {
+    super(`Reatom gate "${gateName}" already has a pending waiter`, {
+      gateName,
+    })
+    this.params = params
+    this.pendingParams = pendingParams
+  }
+}
+
+export class ReatomGateMissingPendingSendError extends ReatomGateError {
+  constructor({ gateName }: { gateName: string }) {
+    super(`Reatom gate "${gateName}" has no pending waiter`, { gateName })
+  }
+}
+
+export type ReatomGateSpawnResult<TResult, TParams = unknown> =
+  | TResult
+  | ReatomGateAbortError<TParams>
+  | ReatomGateConcurrentSpawnError<TParams>
+
+export function reatomGate<TResult, TParams = void>({ name }: { name: string }) {
   const waiter = atom<PendingWaiter<TResult, TParams> | null>(
     null,
     `${name}.waiter`,
@@ -50,17 +100,22 @@ export function reatomGate<
     const current = waiter()
 
     if (current !== null) {
-      return mapConcurrentSpawn({
+      return new ReatomGateConcurrentSpawnError({
+        gateName: name,
         params,
-        pending: { params: current.params },
+        pendingParams: current.params,
       })
     }
 
     if (signal?.aborted) {
-      return mapAbort({ params, reason: signal.reason })
+      return new ReatomGateAbortError({
+        gateName: name,
+        params,
+        cause: signal.reason,
+      })
     }
 
-    return await new Promise<TResult>((resolve) => {
+    return await new Promise<ReatomGateSpawnResult<TResult>>((resolve) => {
       let onAbort: EventListener | null = null
       const cleanup = () => {
         if (signal && onAbort) {
@@ -72,7 +127,13 @@ export function reatomGate<
       onAbort = signal
         ? () => {
             cleanup()
-            resolve(mapAbort({ params, reason: signal.reason }))
+            resolve(
+              new ReatomGateAbortError({
+                gateName: name,
+                params,
+                cause: signal.reason,
+              }),
+            )
           }
         : null
 
@@ -96,7 +157,9 @@ export function reatomGate<
     const current = waiter()
 
     if (current === null) {
-      return mapMissingPendingSend({ value })
+      return new ReatomGateMissingPendingSendError({
+        gateName: name,
+      })
     }
 
     current.cleanup()
