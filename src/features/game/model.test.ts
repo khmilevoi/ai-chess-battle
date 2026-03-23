@@ -13,6 +13,7 @@ import {
   createStoredGame,
   setActiveGameId,
   storedGameRecordAtom,
+  type StoredGameActorControls,
 } from '../../shared/storage/gameSessionStorage'
 import { createGameModel } from './model'
 
@@ -70,12 +71,14 @@ function createOpenAiResponse(uci: string) {
 
 function createSavedGame({
   config,
+  actorControls = {},
   moves = [],
 }: {
   config: MatchConfig
+  actorControls?: StoredGameActorControls
   moves?: Array<string>
 }) {
-  const game = createRequiredStoredGame({ config, moves })
+  const game = createRequiredStoredGame({ config, actorControls, moves })
   setActiveGameId(game.id)
   return game
 }
@@ -372,7 +375,7 @@ describe('createGameModel', () => {
     expect(model.activeActorControls()).toBeNull()
   })
 
-  it('exposes both actor panels and updates the active side as turns change', async () => {
+  it('exposes a shared actor panel and updates its representative side as turns change', async () => {
     let resolveFirstMove: ((response: Response) => void) | null = null
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
@@ -416,16 +419,13 @@ describe('createGameModel', () => {
     expect(await model.startMatch()).toBeNull()
     expect(model.actorPanels()).toEqual([
       expect.objectContaining({
+        panelKey: 'controls:openai',
         side: 'white',
+        sides: ['white', 'black'],
+        activeSide: 'white',
         displayName: 'OpenAI Actor',
         hasControls: true,
         isActive: true,
-      }),
-      expect.objectContaining({
-        side: 'black',
-        displayName: 'OpenAI Actor',
-        hasControls: true,
-        isActive: false,
       }),
     ])
 
@@ -433,17 +433,13 @@ describe('createGameModel', () => {
     ;(resolveFirstMove as null | ((response: Response) => void))?.(
       createOpenAiResponse('e2e4'),
     )
-    await waitForCondition(() =>
-      model.actorPanels().some((actorPanel) => actorPanel.side === 'black' && actorPanel.isActive),
-    )
+    await waitForCondition(() => model.actorPanels()[0]?.activeSide === 'black')
 
     expect(model.actorPanels()).toEqual([
       expect.objectContaining({
-        side: 'white',
-        isActive: false,
-      }),
-      expect.objectContaining({
         side: 'black',
+        sides: ['white', 'black'],
+        activeSide: 'black',
         isActive: true,
       }),
     ])
@@ -454,12 +450,146 @@ describe('createGameModel', () => {
     expect(model.actorPanels()).toEqual([
       expect.objectContaining({
         side: 'white',
+        activeSide: 'white',
         isActive: true,
       }),
-      expect.objectContaining({
-        side: 'black',
-        isActive: false,
-      }),
     ])
+  })
+
+  it('shares wait-for-confirmation state across identical OpenAI actors and persists it', async () => {
+    let resolveFirstMove: ((response: Response) => void) | null = null
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFirstMove = resolve
+          }),
+      )
+      .mockImplementationOnce(() => new Promise(() => {}))
+
+    const game = createSavedGame({
+      config: {
+        white: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+        black: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+      },
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+
+    const whiteActor = model.actorPanels()[0]?.actor
+
+    expect(whiteActor).toBeInstanceOf(OpenAiActorRuntime)
+
+    if (!(whiteActor instanceof OpenAiActorRuntime)) {
+      throw new Error('Expected OpenAI actor panel to expose OpenAiActorRuntime.')
+    }
+
+    whiteActor.setWaitForConfirmation(true)
+
+    expect(peek(storedGameRecordAtom(game.id))?.actorControls).toEqual({
+      openai: {
+        waitForConfirmation: true,
+      },
+    })
+
+    await waitForCondition(() => resolveFirstMove !== null)
+    ;(resolveFirstMove as null | ((response: Response) => void))?.(
+      createOpenAiResponse('e2e4'),
+    )
+    await waitForCondition(() => {
+      const actor = model.actorPanels()[0]?.actor
+
+      return (
+        actor instanceof OpenAiActorRuntime &&
+        model.actorPanels()[0]?.activeSide === 'black' &&
+        actor.waitForConfirmation() &&
+        actor.confirmationPending() !== null
+      )
+    })
+
+    const blackActor = model.actorPanels()[0]?.actor
+
+    expect(blackActor).toBeInstanceOf(OpenAiActorRuntime)
+
+    if (!(blackActor instanceof OpenAiActorRuntime)) {
+      throw new Error('Expected OpenAI actor panel to expose OpenAiActorRuntime.')
+    }
+
+    expect(blackActor.waitForConfirmation()).toBe(true)
+    expect(blackActor.confirmationPending()).toEqual({
+      params: { side: 'black' },
+    })
+  })
+
+  it('rehydrates persisted shared confirmation state for the same saved game', async () => {
+    const game = createSavedGame({
+      config: {
+        white: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+        black: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-test',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+      },
+      actorControls: {
+        openai: {
+          waitForConfirmation: true,
+        },
+      },
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+
+    const actor = model.actorPanels()[0]?.actor
+
+    expect(actor).toBeInstanceOf(OpenAiActorRuntime)
+
+    if (!(actor instanceof OpenAiActorRuntime)) {
+      throw new Error('Expected OpenAI actor panel to expose OpenAiActorRuntime.')
+    }
+
+    expect(actor.waitForConfirmation()).toBe(true)
+    expect(actor.confirmationPending()).toEqual({
+      params: { side: 'white' },
+    })
   })
 })

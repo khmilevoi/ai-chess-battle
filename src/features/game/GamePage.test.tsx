@@ -10,6 +10,7 @@ import {
   clearStoredGameArchive,
   createStoredGame,
   setActiveGameId,
+  type StoredGameActorControls,
 } from '../../shared/storage/gameSessionStorage'
 import styles from './GamePage.module.css'
 import { GamePage } from './GamePage'
@@ -29,12 +30,14 @@ function createRequiredStoredGame(
 
 function createSavedGame({
   config,
+  actorControls = {},
   moves = [],
 }: {
   config: MatchConfig
+  actorControls?: StoredGameActorControls
   moves?: Array<string>
 }) {
-  const game = createRequiredStoredGame({ config, moves })
+  const game = createRequiredStoredGame({ config, actorControls, moves })
   setActiveGameId(game.id)
   return game
 }
@@ -52,12 +55,14 @@ function createOpenAiSide() {
 
 async function createStartedModel({
   config,
+  actorControls = {},
   moves = [],
 }: {
   config: MatchConfig
+  actorControls?: StoredGameActorControls
   moves?: Array<string>
 }) {
-  const game = createSavedGame({ config, moves })
+  const game = createSavedGame({ config, actorControls, moves })
   const model = createGameModel({
     name: `game-page-test-${crypto.randomUUID()}`,
     gameId: game.id,
@@ -71,6 +76,20 @@ async function createStartedModel({
 }
 
 describe('GamePage', () => {
+  const longMoveHistory = [
+    'e2e4',
+    'e7e5',
+    'f2f4',
+    'g7g5',
+    'h2h4',
+    'f7f5',
+    'g2g4',
+    'd7d5',
+    'd2d4',
+    'c7c5',
+    'c2c4',
+  ]
+
   beforeEach(() => {
     clearStoredGameArchive()
     window.localStorage.clear()
@@ -93,8 +112,28 @@ describe('GamePage', () => {
     expect(
       screen.getByText('Wait for confirmation before sending the OpenAI request'),
     ).toBeInTheDocument()
-    expect(screen.getByText('Moves are selected directly on the board.')).toBeInTheDocument()
+    expect(screen.getByText(/Moves are selected directly on the board\./)).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Position' })).not.toBeInTheDocument()
+  })
+
+  it('renders a shared OpenAI control card when both sides use the same actor type', async () => {
+    const model = await createStartedModel({
+      config: {
+        white: createOpenAiSide(),
+        black: createOpenAiSide(),
+      },
+      actorControls: {
+        openai: {
+          waitForConfirmation: true,
+        },
+      },
+    })
+
+    render(<GamePage model={model} />)
+
+    expect(screen.getByText('White & Black request controls')).toBeInTheDocument()
+    expect(screen.getByText('White is waiting for your approval.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send OpenAI request' })).toBeEnabled()
   })
 
   it('shows an unavailable state for actor controls while reviewing history', async () => {
@@ -187,5 +226,35 @@ describe('GamePage', () => {
     })
     expect((historyList as HTMLElement).scrollTop).toBe(37)
     expect(scrollIntoViewSpy).not.toHaveBeenCalled()
+  })
+
+  it('renders multi-digit move numbers and secondary move labels in long histories', async () => {
+    const model = await createStartedModel({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: longMoveHistory,
+    })
+
+    const { container } = render(<GamePage model={model} />)
+    const moveNumbers = Array.from(
+      container.querySelectorAll(`.${styles.historyMoveNumber}`),
+    ).map((element) => element.textContent)
+
+    expect(moveNumbers).toContain('10')
+    expect(moveNumbers).toContain('11')
+    expect(
+      screen.getByRole('button', { name: '10c7 to c5c7c5' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: '11c2 to c4c2c4' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('c7c5', { selector: `.${styles.historyMoveSecondary}` }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('c2c4', { selector: `.${styles.historyMoveSecondary}` }),
+    ).toBeInTheDocument()
   })
 })

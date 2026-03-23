@@ -1,10 +1,11 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
+import type { AiActorSharedControls } from './ai-actor'
 import { HumanActor } from './human'
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
   OpenAiActor,
-  type OpenAiActorRuntime,
+  OpenAiActorRuntime,
 } from './ai-actor/open-ai'
 import {
   actorRegistry,
@@ -27,7 +28,9 @@ describe('actor registry', () => {
     expect(listRegisteredActors()).toEqual([HumanActor, OpenAiActor])
     expect(actorRegistry.human.SettingsComponent).toBe(HumanActor.SettingsComponent)
     expect(actorRegistry.human.ControlsComponent).toBeUndefined()
+    expect(actorRegistry.human.controlsContract).toBeUndefined()
     expect(actorRegistry.openai.ControlsComponent).toBe(OpenAiActor.ControlsComponent)
+    expect(actorRegistry.openai.controlsContract).toBeDefined()
   })
 
   it('returns actor-specific defaults that satisfy descriptor schemas', () => {
@@ -65,5 +68,25 @@ describe('actor registry', () => {
     expectTypeOf<
       MatchSideConfigFromRegistry<ActorRegistry, 'human'>['actorConfig']
     >().toEqualTypeOf<ReturnType<typeof HumanActor.createDefaultConfig>>()
+  })
+
+  it('creates OpenAI runtimes through descriptor contracts', () => {
+    const config = {
+      apiKey: 'sk-test',
+      model: DEFAULT_OPENAI_MODEL,
+      reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+    }
+    const runtimeControls = {
+      waitForConfirmation: () => false,
+      setWaitForConfirmationValue: () => null,
+    } as unknown as AiActorSharedControls
+    const actor = OpenAiActor.create(config, { runtimeControls })
+
+    if (!(actor instanceof OpenAiActorRuntime)) {
+      throw actor
+    }
+
+    expect(OpenAiActor.controlsContract?.getControlGroupKey(config)).toBe('openai')
+    expect(actor.waitForConfirmation).toBe(runtimeControls.waitForConfirmation)
   })
 })

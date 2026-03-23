@@ -1,5 +1,5 @@
 import { atom, computed, peek, withLocalStorage } from '@reatom/core'
-import type { MatchConfig } from '../../actors/registry'
+import { type MatchConfig } from '../../actors/registry'
 import { createChessEngine } from '../../domain/chess/createChessEngine'
 import {
   isTerminalStatus,
@@ -17,10 +17,13 @@ const STORAGE_VERSION = 'games@1'
 const LEGACY_STORAGE_VERSION = 'game-session@1'
 const STORAGE_DATA_VERSION = 1
 
+export type StoredGameActorControls = Record<string, unknown>
+
 export type StoredGameRecord = {
   id: string
   version: typeof STORAGE_DATA_VERSION
   config: MatchConfig
+  actorControls: StoredGameActorControls
   moves: Array<UciMove>
   createdAt: number
   updatedAt: number
@@ -81,6 +84,16 @@ function formatStatus(snapshot: BoardSnapshot): string {
   return `Draw: ${status.reason}`
 }
 
+function normalizeStoredGameActorControls(value: unknown): StoredGameActorControls {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {}
+  }
+
+  const record = value as Record<string, unknown>
+
+  return { ...record }
+}
+
 function normalizeStoredGameRecordValue(value: unknown): StoredGameRecord | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null
@@ -122,6 +135,7 @@ function normalizeStoredGameRecordValue(value: unknown): StoredGameRecord | null
     id: record.id,
     version: STORAGE_DATA_VERSION,
     config,
+    actorControls: normalizeStoredGameActorControls(record.actorControls),
     moves: record.moves as Array<UciMove>,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -216,6 +230,7 @@ function createMigratedArchive(
     id: crypto.randomUUID(),
     version: STORAGE_DATA_VERSION,
     config: legacySession.config,
+    actorControls: {},
     moves: legacySession.moves,
     createdAt: legacySession.updatedAt,
     updatedAt: legacySession.updatedAt,
@@ -441,9 +456,11 @@ export const activeStoredGameSummaryAtom = computed(() => {
 
 export function createStoredGameRecord({
   config,
+  actorControls = {},
   moves = [],
 }: {
   config: MatchConfig
+  actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
 }): StoredGameRecord {
   const now = Date.now()
@@ -452,6 +469,7 @@ export function createStoredGameRecord({
     id: crypto.randomUUID(),
     version: STORAGE_DATA_VERSION,
     config,
+    actorControls,
     moves,
     createdAt: now,
     updatedAt: now,
@@ -460,14 +478,16 @@ export function createStoredGameRecord({
 
 export function createStoredGame({
   config,
+  actorControls = {},
   moves = [],
   makeActive = false,
 }: {
   config: MatchConfig
+  actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
   makeActive?: boolean
 }): StoredGameRecord | StorageError {
-  const record = createStoredGameRecord({ config, moves })
+  const record = createStoredGameRecord({ config, actorControls, moves })
   const persisted = saveStoredGameRecord(record, { activate: makeActive })
 
   if (persisted !== null) {
@@ -516,11 +536,13 @@ export function saveStoredGameRecord(
 export function updateStoredGameRecord({
   gameId,
   config,
+  actorControls,
   moves,
   updatedAt = Date.now(),
 }: {
   gameId: string
   config?: MatchConfig
+  actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
   updatedAt?: number
 }): StoredGameRecord | null {
@@ -533,6 +555,7 @@ export function updateStoredGameRecord({
   const nextRecord: StoredGameRecord = {
     ...currentRecord,
     config: config ?? currentRecord.config,
+    actorControls: actorControls ?? currentRecord.actorControls,
     moves: moves ?? currentRecord.moves,
     updatedAt,
   }

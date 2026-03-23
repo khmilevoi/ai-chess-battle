@@ -98,6 +98,26 @@ function formatMoveCount(count: number) {
   return `${count} move${count === 1 ? '' : 's'}`
 }
 
+function formatActorPanelTitle(sides: Array<keyof typeof sideLabels>) {
+  if (sides.length === 2) {
+    return 'White & Black'
+  }
+
+  return sideLabels[sides[0]]
+}
+
+function getActorPanelStateLabel(actorPanel: ActorPanelEntry) {
+  if (actorPanel.activeSide === null) {
+    return 'Standing by'
+  }
+
+  if (actorPanel.sides.length === 1) {
+    return 'To move'
+  }
+
+  return `${sideLabels[actorPanel.activeSide]} to move`
+}
+
 function resolveControlsComponent(
   actorPanel: ActorPanelEntry,
 ) {
@@ -106,6 +126,8 @@ function resolveControlsComponent(
   return descriptor.ControlsComponent as
     | ComponentType<{
         side: typeof actorPanel.side
+        sides: typeof actorPanel.sides
+        activeSide: typeof actorPanel.activeSide
         actor: typeof actorPanel.actor
       }>
     | undefined
@@ -126,7 +148,7 @@ function renderActorControlsPanel({
           <h2 className={styles.panelTitle}>Actors</h2>
         </div>
         <p className={styles.panelNote}>
-          Per-side automation and confirmation.
+          Per-side controls, shared automatically when both sides use the same actor.
         </p>
       </div>
 
@@ -145,16 +167,21 @@ function renderActorControlsPanel({
             styles.actorSection,
             actorPanel.isActive ? styles.actorSectionActive : styles.actorSectionIdle,
           ].join(' ')
-          const sideBadgeClassName = [
-            styles.sideBadge,
-            actorPanel.side === 'white' ? styles.sideBadgeWhite : styles.sideBadgeBlack,
-          ].join(' ')
-
           return (
-            <section key={actorPanel.side} className={cardClassName}>
+            <section key={actorPanel.panelKey} className={cardClassName}>
               <div className={styles.actorSectionHeader}>
                 <div className={styles.actorSectionBadges}>
-                  <span className={sideBadgeClassName}>{sideLabels[actorPanel.side]}</span>
+                  {actorPanel.sides.map((side) => (
+                    <span
+                      key={side}
+                      className={[
+                        styles.sideBadge,
+                        side === 'white' ? styles.sideBadgeWhite : styles.sideBadgeBlack,
+                      ].join(' ')}
+                    >
+                      {sideLabels[side]}
+                    </span>
+                  ))}
                   <span
                     className={[
                       styles.actorStateBadge,
@@ -163,7 +190,7 @@ function renderActorControlsPanel({
                         : styles.actorStateBadgeIdle,
                     ].join(' ')}
                   >
-                    {actorPanel.isActive ? 'To move' : 'Standing by'}
+                    {getActorPanelStateLabel(actorPanel)}
                   </span>
                 </div>
                 <span className={styles.actorModeLabel}>
@@ -173,12 +200,19 @@ function renderActorControlsPanel({
 
               <div className={styles.actorIdentity}>
                 <h3 className={styles.actorTitle}>{actorPanel.displayName}</h3>
-                <p className={styles.actorSummary}>{descriptor.summary}</p>
+                <p className={styles.actorSummary}>
+                  {formatActorPanelTitle(actorPanel.sides)} · {descriptor.summary}
+                </p>
               </div>
 
               {ControlsComponent && controlsNotice === null ? (
                 <div className={styles.actorControlsSlot}>
-                  <ControlsComponent side={actorPanel.side} actor={actorPanel.actor} />
+                  <ControlsComponent
+                    side={actorPanel.side}
+                    sides={actorPanel.sides}
+                    activeSide={actorPanel.activeSide}
+                    actor={actorPanel.actor}
+                  />
                 </div>
               ) : (
                 <div className={styles.actorInfoCard}>

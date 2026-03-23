@@ -6,11 +6,23 @@ import styles from './controls.module.css'
 
 export const OpenAiActorControls = reatomMemo(({
   side,
+  sides,
+  activeSide,
   actor,
 }: ActorControlsProps<OpenAiActorRuntime>) => {
   const waitForConfirmation = actor.waitForConfirmation()
   const confirmationPending = actor.confirmationPending()
-  const waitingLabel = side === 'white' ? 'White' : 'Black'
+  const sideLabels = {
+    white: 'White',
+    black: 'Black',
+  } as const
+  const isShared = sides.length === 2
+  const pendingSide = confirmationPending?.params.side ?? activeSide
+  const waitingLabel = isShared
+    ? 'White & Black'
+    : side === 'white'
+      ? 'White'
+      : 'Black'
   const buttonDisabled =
     !waitForConfirmation || confirmationPending === null
 
@@ -22,8 +34,12 @@ export const OpenAiActorControls = reatomMemo(({
           <p className={styles.summary}>
             {waitForConfirmation
               ? confirmationPending
-                ? 'Waiting for your approval.'
-                : 'Next turn pauses for approval.'
+                ? pendingSide
+                  ? `${sideLabels[pendingSide]} is waiting for your approval.`
+                  : 'Waiting for your approval.'
+                : isShared
+                  ? 'Both sides pause before the next OpenAI request.'
+                  : 'Next turn pauses for approval.'
               : 'Requests are sent automatically.'}
           </p>
         </div>
@@ -63,8 +79,12 @@ export const OpenAiActorControls = reatomMemo(({
           <p className={styles.actionText}>
             {waitForConfirmation
               ? confirmationPending
-                ? 'Ready to send.'
-                : 'Standing by for the next turn.'
+                ? pendingSide
+                  ? `Ready to send for ${sideLabels[pendingSide]}.`
+                  : 'Ready to send.'
+                : isShared
+                  ? 'Shared confirmation is armed for both sides.'
+                  : 'Standing by for the next turn.'
               : 'No confirmation step required.'}
           </p>
         </div>

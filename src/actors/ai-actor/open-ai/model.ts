@@ -10,7 +10,11 @@ import {
   type ActorRequestError,
 } from '../../../shared/errors'
 import { toUciMove, type ActorMove } from '../../../domain/chess/types'
-import { AiActor, type AiActorRequestArgs } from '../model'
+import {
+  AiActor,
+  type AiActorRequestArgs,
+  type AiActorSharedControls,
+} from '../model'
 import type { OpenAiActorConfig } from './config.schema'
 
 const moveResponseSchema = z.object({
@@ -97,10 +101,12 @@ export class OpenAiActorRuntime extends AiActor {
   constructor(
     config: OpenAiActorConfig,
     name: string = named('openAiActorRuntime'),
+    sharedControls?: AiActorSharedControls,
   ) {
     super({
       displayName: 'OpenAI actor',
       name,
+      sharedControls,
     })
     this.config = config
     this.client = new OpenAI({

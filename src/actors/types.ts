@@ -23,7 +23,28 @@ export type ActorSettingsProps<Config> = {
 
 export type ActorControlsProps<Model extends AnyActorModel = AnyActorModel> = {
   side: Side
+  sides: Array<Side>
+  activeSide: Side | null
   actor: Model
+}
+
+export type ActorCreateOptions<RuntimeControls = unknown> = {
+  runtimeControls?: RuntimeControls
+}
+
+export type ActorControlsContract<
+  Config = unknown,
+  StoredState = unknown,
+  RuntimeControls = unknown,
+> = {
+  storageSchema: ZodType<StoredState>
+  createDefaultStoredState: () => StoredState
+  getControlGroupKey: (config: Config) => string
+  createRuntimeControls: (args: {
+    name: string
+    initialState: StoredState
+    persist: (nextState: StoredState) => void
+  }) => RuntimeControls
 }
 
 export interface ActorDescriptor<
@@ -39,9 +60,13 @@ export interface ActorDescriptor<
   summary: string
   configSchema: ZodType<Config>
   createDefaultConfig: () => Config
-  create: (config: unknown) => Model | ActorConfigError
+  create: (
+    config: unknown,
+    options?: ActorCreateOptions,
+  ) => Model | ActorConfigError
   SettingsComponent: SettingsComponent
   ControlsComponent?: ComponentType<ActorControlsProps<Model>>
+  controlsContract?: ActorControlsContract<Config, any, any>
 }
 
 export function defineActor<
@@ -73,6 +98,12 @@ type ActorDescriptorParts<Descriptor> =
           Config,
           SettingsComponent & ComponentType<ActorSettingsProps<Config>>
         >['ControlsComponent']
+        controlsContract: ActorDescriptor<
+          Key,
+          Model & AnyActorModel,
+          Config,
+          SettingsComponent & ComponentType<ActorSettingsProps<Config>>
+        >['controlsContract']
       }
     : never
 

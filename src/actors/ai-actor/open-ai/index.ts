@@ -1,3 +1,6 @@
+import { action, atom } from '@reatom/core'
+import { z } from 'zod'
+import type { AiActorSharedControls } from '..'
 import { ActorConfigError } from '../../../shared/errors'
 import { defineActor } from '../../types'
 import {
@@ -8,6 +11,39 @@ import {
 import { OpenAiActorControls } from './controls'
 import { OpenAiActorRuntime } from './model'
 import { OpenAiActorSettings } from './ui'
+
+export const openAiActorStoredControlsSchema = z.object({
+  waitForConfirmation: z.boolean(),
+})
+
+export type OpenAiActorStoredControls = z.infer<
+  typeof openAiActorStoredControlsSchema
+>
+
+function createOpenAiRuntimeControls({
+  name,
+  initialState,
+  persist,
+}: {
+  name: string
+  initialState: OpenAiActorStoredControls
+  persist: (nextState: OpenAiActorStoredControls) => void
+}): AiActorSharedControls {
+  const waitForConfirmation = atom(
+    initialState.waitForConfirmation,
+    `${name}.waitForConfirmation`,
+  )
+  const setWaitForConfirmationValue = action((next: boolean) => {
+    waitForConfirmation.set(next)
+    persist({ waitForConfirmation: next })
+    return null
+  }, `${name}.setWaitForConfirmationValue`)
+
+  return {
+    waitForConfirmation,
+    setWaitForConfirmationValue,
+  }
+}
 
 export const OpenAiActor = defineActor({
   key: 'openai',
@@ -21,7 +57,15 @@ export const OpenAiActor = defineActor({
   }),
   SettingsComponent: OpenAiActorSettings,
   ControlsComponent: OpenAiActorControls,
-  create(config) {
+  controlsContract: {
+    storageSchema: openAiActorStoredControlsSchema,
+    createDefaultStoredState: (): OpenAiActorStoredControls => ({
+      waitForConfirmation: false,
+    }),
+    getControlGroupKey: (_config) => 'openai',
+    createRuntimeControls: createOpenAiRuntimeControls,
+  },
+  create(config, options) {
     const validation = openAiActorConfigSchema.safeParse(config)
 
     if (!validation.success) {
@@ -32,7 +76,11 @@ export const OpenAiActor = defineActor({
       })
     }
 
-    return new OpenAiActorRuntime(validation.data)
+    return new OpenAiActorRuntime(
+      validation.data,
+      undefined,
+      options?.runtimeControls as AiActorSharedControls | undefined,
+    )
   },
 })
 

@@ -33,6 +33,8 @@ import {
   saveStoredGameRecord,
   setActiveGameId,
   storedGameRecordAtom,
+  updateStoredGameRecord,
+  type StoredGameActorControls,
 } from '../../shared/storage/gameSessionStorage'
 import { StorageError, TurnCancelledError } from '../../shared/errors'
 
@@ -41,6 +43,7 @@ type SideActors = Record<
   {
     actorKey: MatchConfig[BoardSnapshot['turn']]['actorKey']
     actor: ActorModel
+    controlGroupKey: string | null
   }
 >
 
@@ -48,16 +51,23 @@ type ActiveActorState = {
   side: BoardSnapshot['turn']
   actorKey: MatchConfig[BoardSnapshot['turn']]['actorKey']
   actor: ActorModel
+  controlGroupKey: string | null
 }
 
 type ActorPanelEntry = {
+  panelKey: string
   side: BoardSnapshot['turn']
+  sides: Array<BoardSnapshot['turn']>
+  activeSide: BoardSnapshot['turn'] | null
   actorKey: MatchConfig[BoardSnapshot['turn']]['actorKey']
   actor: ActorModel
+  controlGroupKey: string | null
   displayName: string
   hasControls: boolean
   isActive: boolean
 }
+
+type RuntimeControlsByGroupKey = Record<string, unknown>
 
 type HistoryMove = {
   moveNumber: number
@@ -147,32 +157,53 @@ function getPromotion(
   return undefined
 }
 
-function createConfiguredActor(sideConfig: MatchSideConfig) {
-  return getRegisteredActor(sideConfig.actorKey).create(sideConfig.actorConfig)
+function createConfiguredActor(
+  sideConfig: MatchSideConfig,
+  runtimeControlsByGroupKey: RuntimeControlsByGroupKey = {},
+) {
+  const descriptor = getRegisteredActor(sideConfig.actorKey)
+  const controlGroupKey =
+    descriptor.controlsContract?.getControlGroupKey(sideConfig.actorConfig as never) ??
+    null
+  const actor = descriptor.create(
+    sideConfig.actorConfig,
+    controlGroupKey === null
+      ? undefined
+      : {
+          runtimeControls: runtimeControlsByGroupKey[controlGroupKey],
+        },
+  )
+
+  if (actor instanceof Error) {
+    return actor
+  }
+
+  return {
+    actorKey: sideConfig.actorKey,
+    actor,
+    controlGroupKey,
+  }
 }
 
-function createSideActors(config: MatchConfig): SideActors | Error {
-  const whiteActor = createConfiguredActor(config.white)
+function createSideActors(
+  config: MatchConfig,
+  runtimeControlsByGroupKey: RuntimeControlsByGroupKey = {},
+): SideActors | Error {
+  const whiteActor = createConfiguredActor(config.white, runtimeControlsByGroupKey)
 
   if (whiteActor instanceof Error) {
     return whiteActor
   }
 
-  const blackActor = createConfiguredActor(config.black)
+  const blackActor = createConfiguredActor(config.black, runtimeControlsByGroupKey)
 
   if (blackActor instanceof Error) {
     return blackActor
   }
 
   return {
-    white: {
-      actorKey: config.white.actorKey,
-      actor: whiteActor,
-    },
-    black: {
-      actorKey: config.black.actorKey,
-      actor: blackActor,
-    },
+    white: whiteActor,
+    black: blackActor,
   }
 }
 
@@ -204,6 +235,96 @@ export function createGameModel({
     name: `${name}.phase`,
     initState: 'pending',
   })
+  const persistActorControls = action(
+    (controlGroupKey: string, controls: unknown) => {
+      const currentGame = peek(storedGameRecordAtom(gameId))
+
+      if (currentGame === null) {
+        return createMissingGameError(gameId)
+      }
+
+      const persisted = updateStoredGameRecord({
+        gameId,
+        actorControls: {
+          ...currentGame.actorControls,
+          [controlGroupKey]: controls,
+        },
+      })
+
+      if (persisted === null) {
+        return new StorageError({
+          message: `Failed to persist actor controls for saved game "${gameId}".`,
+        })
+      }
+
+      return persisted
+    },
+    `${name}.persistActorControls`,
+  )
+
+  const createRuntimeControlsByGroupKey = (
+    config: MatchConfig,
+    actorControls: StoredGameActorControls,
+  ): RuntimeControlsByGroupKey => {
+    const runtimeControlsByGroupKey: RuntimeControlsByGroupKey = {}
+
+    for (const side of ['white', 'black'] as const) {
+      const sideConfig = config[side]
+      const descriptor = getRegisteredActor(sideConfig.actorKey)
+      const controlsContract = descriptor.controlsContract
+
+      if (controlsContract === undefined) {
+        continue
+      }
+
+      const controlGroupKey = controlsContract.getControlGroupKey(
+        sideConfig.actorConfig as never,
+      )
+
+      if (controlGroupKey in runtimeControlsByGroupKey) {
+        continue
+      }
+
+      const initialStateResult = controlsContract.storageSchema.safeParse(
+        actorControls[controlGroupKey],
+      )
+      const initialState = initialStateResult.success
+        ? initialStateResult.data
+        : controlsContract.createDefaultStoredState()
+
+      runtimeControlsByGroupKey[controlGroupKey] =
+        controlsContract.createRuntimeControls({
+          name: `${name}.controls(${controlGroupKey})`,
+          initialState,
+          persist: (nextState) => {
+            const normalizedStateResult = controlsContract.storageSchema.safeParse(
+              nextState,
+            )
+
+            if (!normalizedStateResult.success) {
+              console.warn(
+                new StorageError({
+                  message: `Actor controls "${controlGroupKey}" failed validation.`,
+                  cause: normalizedStateResult.error,
+                }),
+              )
+              return
+            }
+
+            const persisted = persistActorControls(
+              controlGroupKey,
+              normalizedStateResult.data,
+            )
+
+            if (persisted instanceof Error) {
+              console.warn(persisted)
+            }
+          },
+        })
+    }
+
+    return runtimeControlsByGroupKey
+  }
 
   const latestMoveCount = computed(
     () => storedGame()?.moves.length ?? 0,
@@ -256,6 +377,7 @@ export function createGameModel({
       side: currentSnapshot.turn,
       actorKey: currentActors[currentSnapshot.turn].actorKey,
       actor: currentActors[currentSnapshot.turn].actor,
+      controlGroupKey: currentActors[currentSnapshot.turn].controlGroupKey,
     } satisfies ActiveActorState
   }, `${name}.activeActorState`)
   const actorPanels = computed(() => {
@@ -266,17 +388,56 @@ export function createGameModel({
       return [] as Array<ActorPanelEntry>
     }
 
+    const whiteActorState = currentActors.white
+    const blackActorState = currentActors.black
+    const whiteDescriptor = getRegisteredActor(whiteActorState.actorKey)
+    const blackDescriptor = getRegisteredActor(blackActorState.actorKey)
+
+    if (
+      whiteActorState.controlGroupKey !== null &&
+      whiteActorState.controlGroupKey === blackActorState.controlGroupKey &&
+      whiteDescriptor.ControlsComponent !== undefined &&
+      whiteDescriptor.ControlsComponent === blackDescriptor.ControlsComponent
+    ) {
+      const activeSide = currentSnapshot?.turn ?? null
+      const representativeSide = activeSide ?? 'white'
+      const representativeActorState = currentActors[representativeSide]
+      const representativeDescriptor = getRegisteredActor(
+        representativeActorState.actorKey,
+      )
+
+      return [
+        {
+          panelKey: `controls:${whiteActorState.controlGroupKey}`,
+          side: representativeSide,
+          sides: ['white', 'black'],
+          activeSide,
+          actorKey: representativeActorState.actorKey,
+          actor: representativeActorState.actor,
+          controlGroupKey: representativeActorState.controlGroupKey,
+          displayName: representativeDescriptor.displayName,
+          hasControls: true,
+          isActive: activeSide !== null,
+        } satisfies ActorPanelEntry,
+      ]
+    }
+
     return (['white', 'black'] as const).map((side) => {
       const actorState = currentActors[side]
       const descriptor = getRegisteredActor(actorState.actorKey)
+      const isActive = currentSnapshot?.turn === side
 
       return {
+        panelKey: side,
         side,
+        sides: [side],
+        activeSide: isActive ? side : null,
         actorKey: actorState.actorKey,
         actor: actorState.actor,
+        controlGroupKey: actorState.controlGroupKey,
         displayName: descriptor.displayName,
         hasControls: descriptor.ControlsComponent !== undefined,
-        isActive: currentSnapshot?.turn === side,
+        isActive,
       } satisfies ActorPanelEntry
     })
   }, `${name}.actorPanels`)
@@ -763,7 +924,13 @@ export function createGameModel({
       return error
     }
 
-    const nextActors = createSideActors(currentGame.config)
+    const nextActors = createSideActors(
+      currentGame.config,
+      createRuntimeControlsByGroupKey(
+        currentGame.config,
+        currentGame.actorControls,
+      ),
+    )
 
     if (nextActors instanceof Error) {
       runtimeError.set(nextActors)

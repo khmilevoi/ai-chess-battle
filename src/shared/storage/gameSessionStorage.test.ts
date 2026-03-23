@@ -6,12 +6,14 @@ import {
   clearStoredGameArchive,
   createStoredGame,
   replayStoredGameRecord,
+  saveStoredGameRecord,
   setActiveGameId,
   storedGameArchiveAtom,
   storedGameRecordAtom,
   storedGameSummariesAtom,
   storedGamesAtom,
   summarizeStoredGameRecord,
+  updateStoredGameRecord,
 } from './gameSessionStorage'
 
 const GAMES_STORAGE_KEY = 'ai-chess-battle.games'
@@ -62,6 +64,59 @@ describe('gameSessionStorage', () => {
     expect(peek(storedGamesAtom)).toHaveLength(2)
     expect(peek(storedGameRecordAtom(firstGame.id))?.moves).toEqual(['e2e4'])
     expect(peek(storedGameRecordAtom(secondGame.id))?.moves).toEqual(['d2d4'])
+  })
+
+  it('persists actor controls on saved game records', () => {
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      actorControls: {
+        openai: {
+          waitForConfirmation: true,
+        },
+      },
+    })
+
+    expect(peek(storedGameRecordAtom(game.id))?.actorControls).toEqual({
+      openai: {
+        waitForConfirmation: true,
+      },
+    })
+  })
+
+  it('updates actor controls without dropping config or moves', () => {
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['e2e4'],
+    })
+
+    const updated = updateStoredGameRecord({
+      gameId: game.id,
+      actorControls: {
+        openai: {
+          waitForConfirmation: true,
+        },
+      },
+      updatedAt: 42,
+    })
+
+    expect(updated).toEqual(
+      expect.objectContaining({
+        config: game.config,
+        moves: ['e2e4'],
+        updatedAt: 42,
+        actorControls: {
+          openai: {
+            waitForConfirmation: true,
+          },
+        },
+      }),
+    )
   })
 
   it('replays and summarizes a saved game record', () => {
@@ -135,6 +190,23 @@ describe('gameSessionStorage', () => {
       newerGame.id,
       olderGame.id,
     ])
+  })
+
+  it('hydrates legacy saved games without actor controls', () => {
+    const gameId = crypto.randomUUID()
+    const saved = saveStoredGameRecord({
+      id: gameId,
+      version: 1,
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: [],
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+
+    expect(saved?.actorControls).toEqual({})
   })
 
   it('tracks the active unfinished game explicitly', () => {

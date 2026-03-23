@@ -31,6 +31,11 @@ export type AiActorRequestArgs = {
   signal: AbortSignal
 }
 
+export type AiActorSharedControls = {
+  waitForConfirmation: Atom<boolean>
+  setWaitForConfirmationValue: Action<[next: boolean], null>
+}
+
 function createConfirmationGate(name: string) {
   return reatomGate<null, { side: Side }>({ name })
 }
@@ -53,17 +58,27 @@ export abstract class AiActor implements AutonomousActor {
   protected constructor({
     displayName,
     name = named('aiActorRuntime'),
+    sharedControls,
   }: {
     displayName: string
     name?: string
+    sharedControls?: AiActorSharedControls
   }) {
     this.displayName = displayName
     this.confirmationGate = createConfirmationGate(`${name}.confirmationGate`)
-    this.waitForConfirmation = atom(false, `${name}.waitForConfirmation`)
+    this.waitForConfirmation =
+      sharedControls?.waitForConfirmation ??
+      atom(false, `${name}.waitForConfirmation`)
+    const setWaitForConfirmationValue =
+      sharedControls?.setWaitForConfirmationValue ??
+      action((next: boolean) => {
+        this.waitForConfirmation.set(next)
+        return null
+      }, `${name}.setWaitForConfirmationValue`)
     this.confirmationPending = this.confirmationGate.pending
     this.isConfirmationPending = this.confirmationGate.isPending
     this.setWaitForConfirmation = action((next: boolean) => {
-      this.waitForConfirmation.set(next)
+      setWaitForConfirmationValue(next)
 
       if (!next && this.confirmationGate.isPending()) {
         this.confirmationGate.send(null)
