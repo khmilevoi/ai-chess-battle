@@ -2,6 +2,7 @@ import { ApiError, GoogleGenAI } from '@google/genai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   GoogleGenAiHttpError,
+  GoogleGenAiResponseError,
   GoogleGenAiTransportError,
   IllegalMoveError,
   TurnCancelledError,
@@ -37,8 +38,36 @@ function createActorContext(): ActorContext {
   }
 }
 
-function createResponse(text?: string) {
-  return { text }
+function createResponse(
+  text?: string,
+  {
+    finishReason,
+    candidatesTokenCount,
+    thoughtsTokenCount,
+  }: {
+    finishReason?: string
+    candidatesTokenCount?: number
+    thoughtsTokenCount?: number
+  } = {},
+) {
+  return {
+    text,
+    candidates:
+      finishReason === undefined
+        ? undefined
+        : [
+            {
+              finishReason,
+            },
+          ],
+    usageMetadata:
+      candidatesTokenCount === undefined && thoughtsTokenCount === undefined
+        ? undefined
+        : {
+            candidatesTokenCount,
+            thoughtsTokenCount,
+          },
+  }
 }
 
 async function flushMicrotask() {
@@ -295,6 +324,53 @@ describe('GoogleActor', () => {
     expect(result).toBeInstanceOf(GoogleGenAiHttpError)
   })
 
+  it('preserves Gemini truncation diagnostics on repeated invalid JSON responses', async () => {
+    const actor = GoogleActor.create(config)
+
+    if (!(actor instanceof GoogleActorRuntime)) {
+      throw actor
+    }
+
+    const client = Reflect.get(actor, 'client') as GoogleGenAI
+    const generateContentMock = vi
+      .spyOn(client.models, 'generateContent')
+      .mockResolvedValue(
+        createResponse('Here is the JSON', {
+          finishReason: 'MAX_TOKENS',
+          candidatesTokenCount: 4,
+          thoughtsTokenCount: 119,
+        }) as never,
+      )
+
+    const result = await actor.requestMove({
+      context: createActorContext(),
+      signal: new AbortController().signal,
+    })
+
+    expect(generateContentMock).toHaveBeenCalledTimes(
+      AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS,
+    )
+    expect(result).toBeInstanceOf(GoogleGenAiResponseError)
+    if (!(result instanceof GoogleGenAiResponseError)) {
+      throw result
+    }
+
+    const cause = Reflect.get(result, 'cause') as Error & {
+      finishReason?: string
+      responseText?: string
+      candidatesTokenCount?: number
+      thoughtsTokenCount?: number
+    }
+
+    expect(cause).toBeInstanceOf(Error)
+    expect(cause).toMatchObject({
+      finishReason: 'MAX_TOKENS',
+      responseText: 'Here is the JSON',
+      candidatesTokenCount: 4,
+      thoughtsTokenCount: 119,
+    })
+  })
+
   it('passes the abort signal into the Gemini request config', async () => {
     const actor = GoogleActor.create(config)
 
@@ -322,6 +398,10 @@ describe('GoogleActor', () => {
         model: DEFAULT_GOOGLE_MODEL,
         config: expect.objectContaining({
           abortSignal: controller.signal,
+          thinkingConfig: {
+            thinkingBudget: 128,
+          },
+          maxOutputTokens: 512,
         }),
       }),
     )

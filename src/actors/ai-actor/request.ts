@@ -14,6 +14,13 @@ type ParsedJsonValue =
 
 export const AI_ACTOR_MAX_OUTPUT_TOKENS = 128
 
+export type AiActorResponseDiagnostics = {
+  finishReason?: string
+  responseText: string
+  candidatesTokenCount?: number
+  thoughtsTokenCount?: number
+}
+
 export const aiActorMoveSchema = z.object({
   from: z.string().regex(/^[a-h][1-8]$/),
   to: z.string().regex(/^[a-h][1-8]$/),
@@ -65,19 +72,46 @@ export function buildAiActorPrompt({
   })
 }
 
+export function createAiActorResponseErrorCause({
+  cause,
+  responseDiagnostics,
+}: {
+  cause: unknown
+  responseDiagnostics?: AiActorResponseDiagnostics
+}) {
+  if (!responseDiagnostics) {
+    return cause
+  }
+
+  return Object.assign(
+    new Error(
+      `Model response diagnostics: finishReason=${responseDiagnostics.finishReason ?? 'unknown'}, candidatesTokenCount=${responseDiagnostics.candidatesTokenCount ?? 'unknown'}, thoughtsTokenCount=${responseDiagnostics.thoughtsTokenCount ?? 'unknown'}.`,
+      { cause },
+    ),
+    responseDiagnostics,
+  )
+}
+
 export function validateAiActorMove<TError extends Error>({
   parsed,
   legalMovesBySquare,
   createResponseError,
+  responseDiagnostics,
 }: {
   parsed: unknown
   legalMovesBySquare: Record<string, Array<string>>
   createResponseError: (cause: unknown) => TError
+  responseDiagnostics?: AiActorResponseDiagnostics
 }): ActorMove | IllegalMoveError | TError {
   const validation = aiActorMoveSchema.safeParse(parsed)
 
   if (!validation.success) {
-    return createResponseError(validation.error)
+    return createResponseError(
+      createAiActorResponseErrorCause({
+        cause: validation.error,
+        responseDiagnostics,
+      }),
+    )
   }
 
   const move = validation.data
@@ -104,14 +138,22 @@ export function parseAiActorMoveJson<TError extends Error>({
   text,
   legalMovesBySquare,
   createResponseError,
+  responseDiagnostics,
 }: {
   text: string
   legalMovesBySquare: Record<string, Array<string>>
   createResponseError: (cause: unknown) => TError
+  responseDiagnostics?: AiActorResponseDiagnostics
 }): ActorMove | IllegalMoveError | TError {
   const parsed: ParsedJsonValue | TError = errore.try({
     try: () => JSON.parse(text) as ParsedJsonValue,
-    catch: (cause) => createResponseError(cause),
+    catch: (cause) =>
+      createResponseError(
+        createAiActorResponseErrorCause({
+          cause,
+          responseDiagnostics,
+        }),
+      ),
   })
 
   if (parsed instanceof Error) {
@@ -122,5 +164,6 @@ export function parseAiActorMoveJson<TError extends Error>({
     parsed,
     legalMovesBySquare,
     createResponseError,
+    responseDiagnostics,
   })
 }

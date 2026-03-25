@@ -14,6 +14,7 @@ import {
   AnthropicActorRuntime,
   DEFAULT_ANTHROPIC_MODEL,
 } from '@/actors/ai-actor/anthropic'
+import { AI_ACTOR_MAX_OUTPUT_TOKENS } from '@/actors/ai-actor/request'
 
 function createActorContext(): ActorContext {
   const engine = createChessEngine()
@@ -469,6 +470,7 @@ describe('AnthropicActor', () => {
     expect(parseMock).toHaveBeenCalledWith(
       expect.objectContaining({
         model: DEFAULT_ANTHROPIC_MODEL,
+        max_tokens: AI_ACTOR_MAX_OUTPUT_TOKENS,
       }),
       {
         signal: controller.signal,

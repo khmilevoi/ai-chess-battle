@@ -9,7 +9,8 @@ import {
 } from '@/shared/errors'
 import { type ActorMove } from '@/domain/chess/types'
 import {
-  AI_ACTOR_MAX_OUTPUT_TOKENS,
+  createAiActorResponseErrorCause,
+  type AiActorResponseDiagnostics,
   AI_ACTOR_MOVE_JSON_SCHEMA,
   buildAiActorInstructions,
   buildAiActorPrompt,
@@ -22,6 +23,9 @@ import {
 } from '../model'
 import type { GoogleActorConfig } from './config.schema'
 
+const GOOGLE_ACTOR_THINKING_BUDGET = 128
+const GOOGLE_ACTOR_MAX_OUTPUT_TOKENS = 512
+
 function hasHttpStatus(
   error: unknown,
 ): error is Error & { status: number } {
@@ -30,6 +34,24 @@ function hasHttpStatus(
     'status' in error &&
     typeof (error as { status: unknown }).status === 'number'
   )
+}
+
+function createGoogleResponseDiagnostics(response: {
+  text?: string
+  candidates?: Array<{ finishReason?: unknown }>
+  usageMetadata?: {
+    candidatesTokenCount?: number
+    thoughtsTokenCount?: number
+  }
+}): AiActorResponseDiagnostics {
+  const finishReason = response.candidates?.[0]?.finishReason
+
+  return {
+    finishReason: finishReason === undefined ? undefined : String(finishReason),
+    responseText: response.text ?? '',
+    candidatesTokenCount: response.usageMetadata?.candidatesTokenCount,
+    thoughtsTokenCount: response.usageMetadata?.thoughtsTokenCount,
+  }
 }
 
 export class GoogleActorRuntime extends AiActor {
@@ -69,9 +91,12 @@ export class GoogleActorRuntime extends AiActor {
           systemInstruction: buildAiActorInstructions(),
           responseMimeType: 'application/json',
           responseJsonSchema: AI_ACTOR_MOVE_JSON_SCHEMA,
+          thinkingConfig: {
+            thinkingBudget: GOOGLE_ACTOR_THINKING_BUDGET,
+          },
           abortSignal: signal,
           temperature: 0,
-          maxOutputTokens: AI_ACTOR_MAX_OUTPUT_TOKENS,
+          maxOutputTokens: GOOGLE_ACTOR_MAX_OUTPUT_TOKENS,
         },
       })
       .catch((cause) => cause as Error)
@@ -90,11 +115,15 @@ export class GoogleActorRuntime extends AiActor {
       })
     }
 
-    const responseText = response.text ?? ''
+    const responseDiagnostics = createGoogleResponseDiagnostics(response)
+    const responseText = responseDiagnostics.responseText
 
     if (responseText.length === 0) {
       return new GoogleGenAiResponseError({
-        cause: new Error('Gemini response did not contain text output.'),
+        cause: createAiActorResponseErrorCause({
+          cause: new Error('Gemini response did not contain text output.'),
+          responseDiagnostics,
+        }),
       })
     }
 
@@ -102,6 +131,7 @@ export class GoogleActorRuntime extends AiActor {
       text: responseText,
       legalMovesBySquare: context.legalMovesBySquare,
       createResponseError: (cause) => new GoogleGenAiResponseError({ cause }),
+      responseDiagnostics,
     })
   }
 }
