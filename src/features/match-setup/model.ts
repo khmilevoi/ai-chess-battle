@@ -19,6 +19,11 @@ import {
   activeStoredGameSummaryAtom,
   createStoredGame,
 } from '@/shared/storage/gameSessionStorage'
+import {
+  redactSideConfig,
+  resolveStoredSideConfig,
+  type StoredSideConfig,
+} from '@/shared/storage/helpers'
 
 type CreateMatchSetupModelOptions = {
   name: string
@@ -29,17 +34,17 @@ type CreateMatchSetupModelOptions = {
 
 function hydrateSharedActorConfig<K extends ActorKey>(
   sideConfig: MatchSideConfig<K>,
-): MatchSideConfig<K> {
+): StoredSideConfig<K> {
   const storedConfig = readStoredActorConfig(sideConfig.actorKey)
 
   if (storedConfig === null) {
-    return sideConfig
+    return redactSideConfig(sideConfig)
   }
 
-  return {
+  return redactSideConfig({
     actorKey: sideConfig.actorKey,
     actorConfig: storedConfig,
-  } as MatchSideConfig<K>
+  } as MatchSideConfig<K>)
 }
 
 function syncSharedActorConfig<K extends ActorKey>(
@@ -54,15 +59,23 @@ export function createMatchSetupModel({
   goToGame,
   goToGames,
 }: CreateMatchSetupModelOptions) {
-  const whiteSideConfig = atom<MatchSideConfig>(
+  const whiteSideConfigState = atom<StoredSideConfig>(
     hydrateSharedActorConfig(initialConfig.white),
-    `${name}.white`,
+    `${name}.whiteState`,
   )
-  const blackSideConfig = atom<MatchSideConfig>(
+  const blackSideConfigState = atom<StoredSideConfig>(
     hydrateSharedActorConfig(initialConfig.black),
-    `${name}.black`,
+    `${name}.blackState`,
   )
   const setupError = atom<Error | null>(null, `${name}.setupError`)
+  const whiteSideConfig = computed(
+    () => resolveStoredSideConfig(whiteSideConfigState()),
+    `${name}.white`,
+  )
+  const blackSideConfig = computed(
+    () => resolveStoredSideConfig(blackSideConfigState()),
+    `${name}.black`,
+  )
 
   const whiteValidation = computed(
     () => validateSideConfig('white', whiteSideConfig()),
@@ -103,42 +116,43 @@ export function createMatchSetupModel({
     const next = hydrateSharedActorConfig(createDefaultSideConfig(actorKey))
 
     if (side === 'white') {
-      whiteSideConfig.set(next)
+      whiteSideConfigState.set(next)
 
-      if (blackSideConfig().actorKey === actorKey) {
-        blackSideConfig.set(next)
+      if (blackSideConfigState().actorKey === actorKey) {
+        blackSideConfigState.set(next)
       }
 
-      return next
+      return resolveStoredSideConfig(next)
     }
 
-    blackSideConfig.set(next)
+    blackSideConfigState.set(next)
 
-    if (whiteSideConfig().actorKey === actorKey) {
-      whiteSideConfig.set(next)
+    if (whiteSideConfigState().actorKey === actorKey) {
+      whiteSideConfigState.set(next)
     }
 
-    return next
+    return resolveStoredSideConfig(next)
   }, `${name}.setSideActor`)
 
   const updateSideConfig = action(
     (side: Side, nextConfig: MatchSideConfig) => {
       syncSharedActorConfig(nextConfig)
+      const nextStoredConfig = redactSideConfig(nextConfig)
 
       if (side === 'white') {
-        whiteSideConfig.set(nextConfig)
+        whiteSideConfigState.set(nextStoredConfig)
 
-        if (blackSideConfig().actorKey === nextConfig.actorKey) {
-          blackSideConfig.set(nextConfig)
+        if (blackSideConfigState().actorKey === nextConfig.actorKey) {
+          blackSideConfigState.set(nextStoredConfig)
         }
 
         return nextConfig
       }
 
-      blackSideConfig.set(nextConfig)
+      blackSideConfigState.set(nextStoredConfig)
 
-      if (whiteSideConfig().actorKey === nextConfig.actorKey) {
-        whiteSideConfig.set(nextConfig)
+      if (whiteSideConfigState().actorKey === nextConfig.actorKey) {
+        whiteSideConfigState.set(nextStoredConfig)
       }
 
       return nextConfig
@@ -172,7 +186,7 @@ export function createMatchSetupModel({
       return error
     }
 
-    storedMatchConfig.set(matchConfig)
+    storedMatchConfig.save(matchConfig)
 
     syncSharedActorConfig(matchConfig.white)
     syncSharedActorConfig(matchConfig.black)

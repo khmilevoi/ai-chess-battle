@@ -33,11 +33,11 @@ export const OpenAiActorSettings = reatomMemo(({
   return (
     <div>
       <AiProviderSettings
+        actorKey="openai"
         value={value}
         onChange={(next) =>
           onChange({
             ...value,
-            apiKey: next.apiKey,
             model: next.model,
           })
         }

@@ -11,9 +11,61 @@
   margin-bottom: 24px;
 }
 
+.headerColumn {
+  display: grid;
+  gap: 16px;
+  min-width: min(100%, 420px);
+}
+
 .brand {
   display: grid;
   gap: 4px;
+}
+
+.vaultCard {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #050505;
+  background: #f6f2e9;
+}
+
+.vaultHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.vaultEyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vaultTitle {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.vaultForm {
+  display: grid;
+  gap: 10px;
+}
+
+.vaultActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vaultMessage {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
 }
 
 .nav {

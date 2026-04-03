@@ -13,11 +13,11 @@ export const AnthropicActorSettings = reatomMemo(({
 }: ActorSettingsProps<AnthropicActorConfig>) => {
   return (
     <AiProviderSettings
+      actorKey="anthropic"
       value={value}
       onChange={(next) =>
         onChange({
           ...value,
-          apiKey: next.apiKey,
           model: next.model,
         })
       }

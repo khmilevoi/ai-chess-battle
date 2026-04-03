@@ -23,6 +23,7 @@ export const OpenAiActor = defineActor({
   displayName: 'OpenAI Actor',
   summary: 'Requests moves from the Responses API.',
   configSchema: openAiActorConfigSchema,
+  secretField: 'apiKey',
   createDefaultConfig: () => ({
     apiKey: '',
     model: DEFAULT_OPENAI_MODEL,

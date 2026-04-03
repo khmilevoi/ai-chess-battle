@@ -83,6 +83,16 @@ export class StorageError extends errore.createTaggedError({
   name: 'StorageError',
 }) {}
 
+export class CredentialError extends errore.createTaggedError({
+  name: 'CredentialError',
+  extends: ActorDomainError,
+}) {}
+
+export class VaultLockedError extends errore.createTaggedError({
+  name: 'VaultLockedError',
+  message: 'Unlock the credential vault before editing API keys.',
+}) {}
+
 export class TurnCancelledError extends errore.createTaggedError({
   name: 'TurnCancelledError',
   message: 'Turn cancelled for $side',
@@ -120,37 +130,75 @@ export type PresentableError =
   | GoogleGenAiHttpError
   | GoogleGenAiResponseError
   | StorageError
+  | CredentialError
+  | VaultLockedError
   | TurnCancelledError
   | Error
 
 export function presentError(error: PresentableError): string {
-  return errore.matchError(error, {
-    IllegalMoveError: (issue) => `Illegal move: ${issue.uci}.`,
-    ActorConfigError: (issue) =>
-      `Configuration error for ${issue.side} / ${issue.actorKey}.`,
-    OpenAiTransportError: () =>
-      'OpenAI request failed before a response was received.',
-    OpenAiHttpError: (issue) =>
-      `OpenAI rejected the request with HTTP ${issue.status}.`,
-    OpenAiResponseError: () =>
-      'OpenAI returned data that could not be converted into a legal move.',
-    AnthropicTransportError: () =>
-      'Anthropic request failed before a response was received.',
-    AnthropicHttpError: (issue) =>
-      `Anthropic rejected the request with HTTP ${issue.status}.`,
-    AnthropicResponseError: () =>
-      'Anthropic returned data that could not be converted into a legal move.',
-    GoogleGenAiTransportError: () =>
-      'Gemini request failed before a response was received.',
-    GoogleGenAiHttpError: (issue) =>
-      `Gemini rejected the request with HTTP ${issue.status}.`,
-    GoogleGenAiResponseError: () =>
-      'Gemini returned data that could not be converted into a legal move.',
-    StorageError: () =>
-      'Saved configuration could not be loaded. Defaults were restored.',
-    TurnCancelledError: () => 'The active turn was cancelled.',
-    ActorError: (issue) => issue.message,
-    EngineError: (issue) => issue.message,
-    Error: (issue) => issue.message || 'Unexpected error.',
-  })
+  if (error instanceof IllegalMoveError) {
+    return `Illegal move: ${error.uci}.`
+  }
+
+  if (error instanceof ActorConfigError) {
+    return `Configuration error for ${error.side} / ${error.actorKey}.`
+  }
+
+  if (error instanceof OpenAiTransportError) {
+    return 'OpenAI request failed before a response was received.'
+  }
+
+  if (error instanceof OpenAiHttpError) {
+    return `OpenAI rejected the request with HTTP ${error.status}.`
+  }
+
+  if (error instanceof OpenAiResponseError) {
+    return 'OpenAI returned data that could not be converted into a legal move.'
+  }
+
+  if (error instanceof AnthropicTransportError) {
+    return 'Anthropic request failed before a response was received.'
+  }
+
+  if (error instanceof AnthropicHttpError) {
+    return `Anthropic rejected the request with HTTP ${error.status}.`
+  }
+
+  if (error instanceof AnthropicResponseError) {
+    return 'Anthropic returned data that could not be converted into a legal move.'
+  }
+
+  if (error instanceof GoogleGenAiTransportError) {
+    return 'Gemini request failed before a response was received.'
+  }
+
+  if (error instanceof GoogleGenAiHttpError) {
+    return `Gemini rejected the request with HTTP ${error.status}.`
+  }
+
+  if (error instanceof GoogleGenAiResponseError) {
+    return 'Gemini returned data that could not be converted into a legal move.'
+  }
+
+  if (error instanceof StorageError) {
+    return 'Saved configuration could not be loaded. Defaults were restored.'
+  }
+
+  if (error instanceof CredentialError) {
+    return error.message
+  }
+
+  if (error instanceof VaultLockedError) {
+    return 'Unlock the credential vault before editing API keys.'
+  }
+
+  if (error instanceof TurnCancelledError) {
+    return 'The active turn was cancelled.'
+  }
+
+  if (error instanceof ActorError || error instanceof EngineError) {
+    return error.message
+  }
+
+  return error.message || 'Unexpected error.'
 }

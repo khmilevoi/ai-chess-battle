@@ -67,6 +67,7 @@ export interface ActorDescriptor<
   displayName: string
   summary: string
   configSchema: ZodType<Config>
+  secretField?: Extract<keyof Config, string>
   createDefaultConfig: () => Config
   create: (
     config: unknown,

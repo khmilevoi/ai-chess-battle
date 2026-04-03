@@ -19,6 +19,7 @@ export const AnthropicActor = defineActor({
   displayName: 'Anthropic Actor',
   summary: 'Requests moves from the Claude Messages API.',
   configSchema: anthropicActorConfigSchema,
+  secretField: 'apiKey',
   createDefaultConfig: () => ({
     apiKey: '',
     model: DEFAULT_ANTHROPIC_MODEL,

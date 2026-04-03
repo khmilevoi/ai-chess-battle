@@ -27,6 +27,7 @@ describe('gameSessionStorage migration', () => {
 
     vi.resetModules()
     const storage = await import('./gameSessionStorage')
+    storage.ensureStoredGameArchiveInitialized()
     const games = peek(storage.storedGamesAtom)
 
     expect(games).toHaveLength(1)
