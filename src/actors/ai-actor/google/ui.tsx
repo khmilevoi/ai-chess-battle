@@ -10,11 +10,11 @@ export const GoogleActorSettings = reatomMemo(({
 }: ActorSettingsProps<GoogleActorConfig>) => {
   return (
     <AiProviderSettings
+      actorKey="google"
       value={value}
       onChange={(next) =>
         onChange({
           ...value,
-          apiKey: next.apiKey,
           model: next.model,
         })
       }

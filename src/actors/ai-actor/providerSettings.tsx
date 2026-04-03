@@ -1,4 +1,10 @@
 import { reatomMemo } from '@/shared/ui/reatomMemo'
+import {
+  clearSecret,
+  setSecret,
+  vaultSecretsAtom,
+  vaultStatusAtom,
+} from '@/shared/storage/credentialVault'
 
 export type AiProviderModelOption = {
   value: string
@@ -17,6 +23,7 @@ type AiProviderSettingsValue = {
 }
 
 type AiProviderSettingsProps = {
+  actorKey: 'openai' | 'anthropic' | 'google'
   value: AiProviderSettingsValue
   onChange: (next: AiProviderSettingsValue) => void
   errors: Record<string, Array<string>>
@@ -42,29 +49,53 @@ const FieldErrorList = reatomMemo(({
 }, 'FieldErrorList')
 
 export const AiProviderSettings = reatomMemo(({
+  actorKey,
   value,
   onChange,
   errors,
   modelOptions,
 }: AiProviderSettingsProps) => {
+  const vaultStatus = vaultStatusAtom()
+  const storedSecret = vaultSecretsAtom()[actorKey] ?? ''
+  const vaultHint =
+    vaultStatus === 'unconfigured'
+      ? 'Set a master password in the header to store API keys.'
+      : vaultStatus === 'locked'
+      ? 'Unlock the vault in the header to edit this API key.'
+      : storedSecret.length > 0
+      ? 'Stored in the encrypted local vault for this browser profile.'
+      : 'Enter an API key to save it in the encrypted local vault.'
+
   return (
     <div>
       <label>
         <span>API key</span>
         <input
           type="password"
-          value={value.apiKey}
-          onChange={(event) =>
-            onChange({
-              ...value,
-              apiKey: event.target.value,
+          value={vaultStatus === 'unlocked' ? storedSecret : ''}
+          disabled={vaultStatus !== 'unlocked'}
+          onChange={(event) => {
+            const nextSecret = event.target.value
+            const persistSecret =
+              nextSecret.length === 0
+                ? clearSecret(actorKey)
+                : setSecret(actorKey, nextSecret)
+
+            void persistSecret.then((result) => {
+              if (!(result instanceof Error)) {
+                return
+              }
+
+              console.warn(result)
             })
-          }
+          }}
           autoComplete="off"
           spellCheck={false}
+          placeholder={vaultStatus === 'unlocked' ? '' : 'Unlock vault to edit'}
         />
       </label>
       <FieldErrorList errors={errors.apiKey} />
+      <p>{vaultHint}</p>
       <label>
         <span>Model</span>
         <select

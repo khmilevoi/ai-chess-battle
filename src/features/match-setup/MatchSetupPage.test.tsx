@@ -1,10 +1,16 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultSideConfig } from '@/actors/registry'
+import { resetVault } from '@/shared/storage/credentialVault'
 import { MatchSetupPage } from './MatchSetupPage'
 import { createMatchSetupModel } from './model'
 
 describe('MatchSetupPage', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    resetVault()
+  })
+
   it('renders new actor options and minimal provider settings', () => {
     const model = createMatchSetupModel({
       name: `match-setup-page-${crypto.randomUUID()}`,

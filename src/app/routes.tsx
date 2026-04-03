@@ -20,6 +20,7 @@ import {
   setActiveGameId,
 } from '@/shared/storage/gameSessionStorage'
 import { Button } from '@/shared/ui/Button'
+import { CredentialVaultControl } from './CredentialVaultControl'
 import styles from './App.module.css'
 
 function renderOutletChildren(outlet: () => ReactNode) {
@@ -38,8 +39,11 @@ export const rootRoute = reatomRoute({
       <div className={styles.shell}>
         <div className={styles.content}>
           <header className={styles.masthead}>
-            <div className={styles.brand}>
-              <h1 className={styles.name}>AI Chess Battle</h1>
+            <div className={styles.headerColumn}>
+              <div className={styles.brand}>
+                <h1 className={styles.name}>AI Chess Battle</h1>
+              </div>
+              <CredentialVaultControl />
             </div>
             <nav className={styles.nav} aria-label="Primary">
               <Button
@@ -229,7 +233,6 @@ export const gameRoute = rootRoute.reatomRoute({
 
 effect(() => {
   ensureStoredGameArchiveInitialized()
-
   const currentUrl = urlAtom()
 
   if (currentUrl.pathname !== '/game') {

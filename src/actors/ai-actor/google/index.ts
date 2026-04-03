@@ -19,6 +19,7 @@ export const GoogleActor = defineActor({
   displayName: 'Gemini Actor',
   summary: 'Requests moves from the Gemini API.',
   configSchema: googleActorConfigSchema,
+  secretField: 'apiKey',
   createDefaultConfig: () => ({
     apiKey: '',
     model: DEFAULT_GOOGLE_MODEL,

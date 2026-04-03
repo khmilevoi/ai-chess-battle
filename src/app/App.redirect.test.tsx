@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { urlAtom } from '@reatom/core'
 import { clearStoredActorConfigMap } from '@/shared/storage/actorConfigStorage'
+import { resetVault } from '@/shared/storage/credentialVault'
 import { clearStoredGameArchive } from '@/shared/storage/gameSessionStorage'
 import { storedMatchConfig } from '@/shared/storage/matchConfigStorage'
 import { setupRoute } from './routes'
@@ -14,9 +15,10 @@ function syncCurrentUrl() {
 describe('App redirects', () => {
   beforeEach(() => {
     clearStoredActorConfigMap()
-    storedMatchConfig.set(null)
+    storedMatchConfig.clear()
     clearStoredGameArchive()
     window.localStorage.clear()
+    resetVault()
     window.history.replaceState({}, '', '/')
     syncCurrentUrl()
     setupRoute.go(undefined, true)

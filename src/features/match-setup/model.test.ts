@@ -7,6 +7,7 @@ import {
   clearStoredActorConfigMap,
   loadStoredActorConfig,
 } from '@/shared/storage/actorConfigStorage'
+import { resetVault } from '@/shared/storage/credentialVault'
 import {
   activeGameIdAtom,
   clearStoredGameArchive,
@@ -16,6 +17,7 @@ import {
   loadStoredMatchConfig,
   storedMatchConfig,
 } from '@/shared/storage/matchConfigStorage'
+import { setupTestVault } from '@/test/credentialVault'
 import { createMatchSetupModel } from './model'
 
 function getLoadedConfig(): MatchConfig {
@@ -31,12 +33,15 @@ function getLoadedConfig(): MatchConfig {
 describe('createMatchSetupModel', () => {
   beforeEach(() => {
     clearStoredActorConfigMap()
-    storedMatchConfig.set(null)
+    storedMatchConfig.clear()
     clearStoredGameArchive()
     window.localStorage.clear()
+    resetVault()
   })
 
-  it('hydrates the model from config loaded from storage', () => {
+  it('hydrates the model from config loaded from storage', async () => {
+    await setupTestVault()
+
     const storedConfig: MatchConfig = {
       white: {
         actorKey: 'openai',
@@ -49,7 +54,7 @@ describe('createMatchSetupModel', () => {
       black: createDefaultSideConfig('human'),
     }
 
-    storedMatchConfig.set(storedConfig)
+    storedMatchConfig.save(storedConfig)
 
     const model = createMatchSetupModel({
       name: `test-setup-${crypto.randomUUID()}`,
@@ -115,7 +120,11 @@ describe('createMatchSetupModel', () => {
     )
   })
 
-  it('keeps shared actor config synchronized between both sides', () => {
+  it('keeps shared actor config synchronized between both sides', async () => {
+    await setupTestVault({
+      openai: 'sk-shared',
+    })
+
     const model = createMatchSetupModel({
       name: `test-setup-${crypto.randomUUID()}`,
       initialConfig: {

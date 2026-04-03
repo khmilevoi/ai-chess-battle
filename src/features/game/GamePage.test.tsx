@@ -14,6 +14,7 @@ import {
   setActiveGameId,
   type StoredGameActorControls,
 } from '@/shared/storage/gameSessionStorage'
+import { setupTestVault } from '@/test/credentialVault'
 import styles from './GamePage.module.css'
 import { GamePage } from './GamePage'
 import { createGameModel } from './model'
@@ -102,9 +103,10 @@ describe('GamePage', () => {
     'c2c4',
   ]
 
-  beforeEach(() => {
+  beforeEach(async () => {
     clearStoredGameArchive()
     window.localStorage.clear()
+    await setupTestVault()
   })
 
   it('renders the combined actor card and removes the position panel', async () => {

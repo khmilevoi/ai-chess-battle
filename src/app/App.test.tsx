@@ -17,6 +17,8 @@ import {
 } from '@/shared/storage/gameSessionStorage'
 import { storedMatchConfig } from '@/shared/storage/matchConfigStorage'
 import { clearStoredActorConfigMap } from '@/shared/storage/actorConfigStorage'
+import { resetVault } from '@/shared/storage/credentialVault'
+import { setupTestVault } from '@/test/credentialVault'
 import { gameRoute, setupRoute } from './routes'
 import { App } from './App'
 
@@ -96,14 +98,16 @@ async function expectLiveMatchLoaded(expectedMoves: Array<string> = []) {
 }
 
 describe('App integration', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     clearStoredActorConfigMap()
-    storedMatchConfig.set(null)
+    storedMatchConfig.clear()
     clearStoredGameArchive()
     window.localStorage.clear()
+    resetVault()
     window.history.replaceState({}, '', '/')
     syncCurrentUrl()
     setupRoute.go(undefined, true)
+    await setupTestVault()
   })
 
   afterEach(() => {
@@ -115,6 +119,9 @@ describe('App integration', () => {
   })
 
   it('renders the setup route on root path', async () => {
+    resetVault()
+    window.localStorage.clear()
+
     render(<App />)
 
     await waitFor(() => {
@@ -123,6 +130,10 @@ describe('App integration', () => {
     expect(screen.getByRole('heading', { name: 'AI Chess Battle' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Setup' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Games' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No vault configured' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Set master password' }),
+    ).toBeInTheDocument()
   })
 
   it('starts a match, navigates through header tabs, and keeps the game resumable', async () => {

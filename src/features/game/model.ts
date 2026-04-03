@@ -36,7 +36,7 @@ import {
   updateStoredGameRecord,
   type StoredGameActorControls,
 } from '@/shared/storage/gameSessionStorage'
-import { StorageError, TurnCancelledError } from '@/shared/errors'
+import { CredentialError, StorageError, TurnCancelledError } from '@/shared/errors'
 
 type SideActors = Record<
   BoardSnapshot['turn'],
@@ -170,6 +170,21 @@ function createConfiguredActor(
   runtimeControlsByGroupKey: RuntimeControlsByGroupKey = {},
 ) {
   const descriptor = getRegisteredActor(sideConfig.actorKey)
+  const secretField = descriptor.secretField
+
+  if (
+    secretField &&
+    typeof sideConfig.actorConfig === 'object' &&
+    sideConfig.actorConfig !== null &&
+    secretField in sideConfig.actorConfig &&
+    typeof (sideConfig.actorConfig as Record<string, unknown>)[secretField] === 'string' &&
+    (sideConfig.actorConfig as Record<string, string>)[secretField].length === 0
+  ) {
+    return new CredentialError({
+      message: `Unlock the vault and enter an API key for ${descriptor.displayName}.`,
+    })
+  }
+
   const controlGroupKey =
     descriptor.controlsContract?.getControlGroupKey(sideConfig.actorConfig as never) ??
     null

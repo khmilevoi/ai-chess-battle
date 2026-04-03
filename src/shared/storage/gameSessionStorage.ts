@@ -9,15 +9,37 @@ import {
   type UciMove,
 } from '@/domain/chess/types'
 import { StorageError } from '../errors'
-import { normalizeStoredMatchConfigValue } from './helpers'
+import {
+  normalizeStoredMatchConfigSnapshotValue,
+  redactMatchConfig,
+  resolveStoredMatchConfig,
+  type StoredMatchConfig,
+} from './helpers'
 
 const STORAGE_KEY = 'ai-chess-battle.games'
 const LEGACY_STORAGE_KEY = 'ai-chess-battle.game-session'
-const STORAGE_VERSION = 'games@1'
-const LEGACY_STORAGE_VERSION = 'game-session@1'
+const STORAGE_VERSION = 'games@2'
+const LEGACY_STORAGE_VERSION = 'game-session@2'
 const STORAGE_DATA_VERSION = 1
+let archiveInitialized = false
 
 export type StoredGameActorControls = Record<string, unknown>
+
+type StoredGameRecordSnapshot = {
+  id: string
+  version: typeof STORAGE_DATA_VERSION
+  config: StoredMatchConfig
+  actorControls: StoredGameActorControls
+  moves: Array<UciMove>
+  createdAt: number
+  updatedAt: number
+}
+
+type StoredGameArchiveSnapshot = {
+  version: typeof STORAGE_DATA_VERSION
+  activeGameId: string | null
+  games: Array<StoredGameRecordSnapshot>
+}
 
 export type StoredGameRecord = {
   id: string
@@ -29,20 +51,12 @@ export type StoredGameRecord = {
   updatedAt: number
 }
 
-type StoredGameArchive = {
-  version: typeof STORAGE_DATA_VERSION
-  activeGameId: string | null
-  games: Array<StoredGameRecord>
-}
-
 type LegacyStoredGameSession = {
   version: typeof STORAGE_DATA_VERSION
-  config: MatchConfig
+  config: StoredMatchConfig
   moves: Array<UciMove>
   updatedAt: number
 }
-
-let archiveInitialized = false
 
 export type StoredGameSummary = {
   id: string
@@ -56,7 +70,7 @@ export type StoredGameSummary = {
   updatedAt: number
 }
 
-function createEmptyArchive(): StoredGameArchive {
+function createEmptyArchive(): StoredGameArchiveSnapshot {
   return {
     version: STORAGE_DATA_VERSION,
     activeGameId: null,
@@ -96,7 +110,9 @@ function normalizeStoredGameActorControls(value: unknown): StoredGameActorContro
   return { ...record }
 }
 
-function normalizeStoredGameRecordValue(value: unknown): StoredGameRecord | null {
+function normalizeStoredGameRecordSnapshotValue(
+  value: unknown,
+): StoredGameRecordSnapshot | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null
   }
@@ -111,7 +127,7 @@ function normalizeStoredGameRecordValue(value: unknown): StoredGameRecord | null
     return null
   }
 
-  const config = normalizeStoredMatchConfigValue(record.config)
+  const config = normalizeStoredMatchConfigSnapshotValue(record.config)
 
   if (config === null) {
     return null
@@ -157,7 +173,7 @@ function normalizeLegacyStoredGameSessionValue(
     return null
   }
 
-  const config = normalizeStoredMatchConfigValue(record.config)
+  const config = normalizeStoredMatchConfigSnapshotValue(record.config)
 
   if (config === null) {
     return null
@@ -182,7 +198,9 @@ function normalizeLegacyStoredGameSessionValue(
   }
 }
 
-function normalizeStoredGameArchiveValue(value: unknown): StoredGameArchive | null {
+function normalizeStoredGameArchiveValue(
+  value: unknown,
+): StoredGameArchiveSnapshot | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null
   }
@@ -198,8 +216,8 @@ function normalizeStoredGameArchiveValue(value: unknown): StoredGameArchive | nu
   }
 
   const games = record.games
-    .map((entry) => normalizeStoredGameRecordValue(entry))
-    .filter((entry): entry is StoredGameRecord => entry !== null)
+    .map((entry) => normalizeStoredGameRecordSnapshotValue(entry))
+    .filter((entry): entry is StoredGameRecordSnapshot => entry !== null)
 
   if (games.length !== record.games.length) {
     return null
@@ -217,6 +235,15 @@ function normalizeStoredGameArchiveValue(value: unknown): StoredGameArchive | nu
   }
 }
 
+function resolveStoredGameRecord(
+  record: StoredGameRecordSnapshot,
+): StoredGameRecord {
+  return {
+    ...record,
+    config: resolveStoredMatchConfig(record.config),
+  }
+}
+
 function getPersistSnapshotValue(persist: unknown): unknown {
   if (typeof persist === 'object' && persist !== null && 'data' in persist) {
     return (persist as { data: unknown }).data
@@ -225,10 +252,42 @@ function getPersistSnapshotValue(persist: unknown): unknown {
   return persist
 }
 
+function readArchiveSnapshotFromStorage(): StoredGameArchiveSnapshot | null {
+  const rawSnapshot = window.localStorage.getItem(STORAGE_KEY)
+
+  if (rawSnapshot === null) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(rawSnapshot) as unknown
+
+    return normalizeStoredGameArchiveValue(getPersistSnapshotValue(parsed))
+  } catch {
+    return null
+  }
+}
+
+function readLegacyStoredGameSessionSnapshotFromStorage(): LegacyStoredGameSession | null {
+  const rawSnapshot = window.localStorage.getItem(LEGACY_STORAGE_KEY)
+
+  if (rawSnapshot === null) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(rawSnapshot) as unknown
+
+    return normalizeLegacyStoredGameSessionValue(getPersistSnapshotValue(parsed))
+  } catch {
+    return null
+  }
+}
+
 function createMigratedArchive(
   legacySession: LegacyStoredGameSession,
-): StoredGameArchive {
-  const migratedRecord: StoredGameRecord = {
+): StoredGameArchiveSnapshot {
+  const migratedRecord: StoredGameRecordSnapshot = {
     id: crypto.randomUUID(),
     version: STORAGE_DATA_VERSION,
     config: legacySession.config,
@@ -237,7 +296,7 @@ function createMigratedArchive(
     createdAt: legacySession.updatedAt,
     updatedAt: legacySession.updatedAt,
   }
-  const summary = summarizeStoredGameRecord(migratedRecord)
+  const summary = summarizeStoredGameRecord(resolveStoredGameRecord(migratedRecord))
 
   return {
     version: STORAGE_DATA_VERSION,
@@ -247,39 +306,7 @@ function createMigratedArchive(
   }
 }
 
-function readPersistedSnapshotFromStorage(key: string): unknown | null {
-  const raw = window.localStorage.getItem(key)
-
-  if (raw === null) {
-    return null
-  }
-
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
-function readStoredGameArchiveSnapshotFromStorage(): StoredGameArchive | null {
-  return (
-    normalizeStoredGameArchiveValue(
-      getPersistSnapshotValue(readPersistedSnapshotFromStorage(STORAGE_KEY)),
-    ) ?? null
-  )
-}
-
-function readLegacyStoredGameSessionSnapshotFromStorage():
-  | LegacyStoredGameSession
-  | null {
-  return (
-    normalizeLegacyStoredGameSessionValue(
-      getPersistSnapshotValue(readPersistedSnapshotFromStorage(LEGACY_STORAGE_KEY)),
-    ) ?? null
-  )
-}
-
-export const storedGameArchiveAtom = atom<StoredGameArchive>(
+export const storedGameArchiveAtom = atom<StoredGameArchiveSnapshot>(
   createEmptyArchive(),
   'storage.gameArchive',
 ).extend(
@@ -316,44 +343,48 @@ const legacyStoredGameSessionAtom = atom<LegacyStoredGameSession | null>(
   }),
 )
 
+function isEmptyArchiveSnapshot(archive: StoredGameArchiveSnapshot): boolean {
+  return archive.games.length === 0 && archive.activeGameId === null
+}
+
 export function ensureStoredGameArchiveInitialized(): void {
-  if (archiveInitialized || typeof window === 'undefined') {
+  if (archiveInitialized) {
     return
+  }
+
+  const currentArchive = peek(storedGameArchiveAtom)
+  const currentLegacySession = peek(legacyStoredGameSessionAtom)
+  const archiveSnapshot = isEmptyArchiveSnapshot(currentArchive)
+    ? readArchiveSnapshotFromStorage() ?? currentArchive
+    : currentArchive
+  const legacySession =
+    currentLegacySession ?? readLegacyStoredGameSessionSnapshotFromStorage()
+
+  if (legacySession !== null && isEmptyArchiveSnapshot(archiveSnapshot)) {
+    storedGameArchiveAtom.set(createMigratedArchive(legacySession))
+    legacyStoredGameSessionAtom.set(null)
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+    archiveInitialized = true
+    return
+  }
+
+  if (archiveSnapshot !== currentArchive) {
+    storedGameArchiveAtom.set(archiveSnapshot)
+  }
+
+  if (legacySession !== null) {
+    legacyStoredGameSessionAtom.set(null)
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY)
   }
 
   archiveInitialized = true
-
-  const archiveFromStorage = readStoredGameArchiveSnapshotFromStorage()
-
-  if (archiveFromStorage !== null) {
-    storedGameArchiveAtom.set(archiveFromStorage)
-  }
-
-  const legacySession = readLegacyStoredGameSessionSnapshotFromStorage()
-
-  if (legacySession === null) {
-    return
-  }
-
-  if (archiveFromStorage === null || archiveFromStorage.games.length === 0) {
-    storedGameArchiveAtom.set(createMigratedArchive(legacySession))
-  }
-
-  legacyStoredGameSessionAtom.set(null)
-  window.localStorage.removeItem(LEGACY_STORAGE_KEY)
 }
 
-export function resetStoredGameArchiveInitializationForTests(): void {
-  archiveInitialized = false
-}
-
-ensureStoredGameArchiveInitialized()
-
-function loadGameArchive(): StoredGameArchive {
+function loadGameArchive(): StoredGameArchiveSnapshot {
   return storedGameArchiveAtom()
 }
 
-function readGameArchive(): StoredGameArchive {
+function readGameArchive(): StoredGameArchiveSnapshot {
   // Imperative reads are used from route loaders and must not subscribe
   // those loaders to archive writes.
   ensureStoredGameArchiveInitialized()
@@ -361,8 +392,8 @@ function readGameArchive(): StoredGameArchive {
 }
 
 function mapArchive(
-  transform: (current: StoredGameArchive) => StoredGameArchive,
-): StoredGameArchive {
+  transform: (current: StoredGameArchiveSnapshot) => StoredGameArchiveSnapshot,
+): StoredGameArchiveSnapshot {
   const currentArchive = readGameArchive()
   const nextArchive = transform(currentArchive)
 
@@ -374,9 +405,9 @@ function mapArchive(
 }
 
 function getStoredGameRecord(
-  games: Array<StoredGameRecord>,
+  games: Array<StoredGameRecordSnapshot>,
   gameId: string,
-): StoredGameRecord | null {
+): StoredGameRecordSnapshot | null {
   return games.find((game) => game.id === gameId) ?? null
 }
 
@@ -409,7 +440,7 @@ function shouldActivateStoredGame(record: StoredGameRecord): boolean {
 }
 
 export const storedGamesAtom = computed(
-  () => loadGameArchive().games,
+  () => loadGameArchive().games.map((record) => resolveStoredGameRecord(record)),
   'storage.gameArchive.games',
 )
 
@@ -431,7 +462,11 @@ export function storedGameRecordAtom(gameId: string) {
   }
 
   const recordAtom = computed(
-    () => getStoredGameRecord(storedGamesAtom(), gameId),
+    () => {
+      const record = getStoredGameRecord(loadGameArchive().games, gameId)
+
+      return record === null ? null : resolveStoredGameRecord(record)
+    },
     `storage.gameRecord(${gameId})`,
   )
 
@@ -440,7 +475,9 @@ export function storedGameRecordAtom(gameId: string) {
 }
 
 export function readStoredGameRecord(gameId: string): StoredGameRecord | null {
-  return getStoredGameRecord(readGameArchive().games, gameId)
+  const record = getStoredGameRecord(readGameArchive().games, gameId)
+
+  return record === null ? null : resolveStoredGameRecord(record)
 }
 
 const storedGameSummaryAtomCache = new Map<
@@ -512,12 +549,30 @@ export function createStoredGameRecord({
   actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
 }): StoredGameRecord {
+  const snapshot = createStoredGameRecordSnapshot({
+    config,
+    actorControls,
+    moves,
+  })
+
+  return resolveStoredGameRecord(snapshot)
+}
+
+function createStoredGameRecordSnapshot({
+  config,
+  actorControls = {},
+  moves = [],
+}: {
+  config: MatchConfig
+  actorControls?: StoredGameActorControls
+  moves?: Array<UciMove>
+}): StoredGameRecordSnapshot {
   const now = Date.now()
 
   return {
     id: crypto.randomUUID(),
     version: STORAGE_DATA_VERSION,
-    config,
+    config: redactMatchConfig(config),
     actorControls,
     moves,
     createdAt: now,
@@ -537,7 +592,6 @@ export function createStoredGame({
   makeActive?: boolean
 }): StoredGameRecord | StorageError {
   ensureStoredGameArchiveInitialized()
-
   const record = createStoredGameRecord({ config, actorControls, moves })
   const persisted = saveStoredGameRecord(record, { activate: makeActive })
 
@@ -557,8 +611,10 @@ export function saveStoredGameRecord(
   },
 ): StoredGameRecord | null {
   ensureStoredGameArchiveInitialized()
-
-  const normalized = normalizeStoredGameRecordValue(record)
+  const normalized = normalizeStoredGameRecordSnapshotValue({
+    ...record,
+    config: redactMatchConfig(record.config),
+  })
 
   if (normalized === null) {
     console.warn('Ignored invalid stored game record.')
@@ -569,12 +625,13 @@ export function saveStoredGameRecord(
     const nextGames = current.games.some((game) => game.id === normalized.id)
       ? current.games.map((game) => (game.id === normalized.id ? normalized : game))
       : [...current.games, normalized]
+    const resolvedRecord = resolveStoredGameRecord(normalized)
 
     return {
       ...current,
       games: nextGames,
       activeGameId:
-        options?.activate && shouldActivateStoredGame(normalized)
+        options?.activate && shouldActivateStoredGame(resolvedRecord)
           ? normalized.id
           : current.activeGameId !== null &&
             nextGames.some((game) => game.id === current.activeGameId)
@@ -583,7 +640,7 @@ export function saveStoredGameRecord(
     }
   })
 
-  return normalized
+  return resolveStoredGameRecord(normalized)
 }
 
 export function updateStoredGameRecord({
@@ -600,22 +657,33 @@ export function updateStoredGameRecord({
   updatedAt?: number
 }): StoredGameRecord | null {
   ensureStoredGameArchiveInitialized()
-
   const currentRecord = getStoredGameRecord(readGameArchive().games, gameId)
 
   if (currentRecord === null) {
     return null
   }
 
-  const nextRecord: StoredGameRecord = {
+  const nextRecord: StoredGameRecordSnapshot = {
     ...currentRecord,
-    config: config ?? currentRecord.config,
+    config: config === undefined ? currentRecord.config : redactMatchConfig(config),
     actorControls: actorControls ?? currentRecord.actorControls,
     moves: moves ?? currentRecord.moves,
     updatedAt,
   }
 
-  return saveStoredGameRecord(nextRecord)
+  const normalized = normalizeStoredGameRecordSnapshotValue(nextRecord)
+
+  if (normalized === null) {
+    console.warn('Ignored invalid stored game record update.')
+    return null
+  }
+
+  mapArchive((current) => ({
+    ...current,
+    games: current.games.map((game) => (game.id === normalized.id ? normalized : game)),
+  }))
+
+  return resolveStoredGameRecord(normalized)
 }
 
 export function clearStoredGameArchive(): void {
@@ -627,7 +695,6 @@ export function clearStoredGameArchive(): void {
 
 export function setActiveGameId(gameId: string | null): void {
   ensureStoredGameArchiveInitialized()
-
   mapArchive((current) => {
     const nextActiveGameId =
       gameId !== null && current.games.some((game) => game.id === gameId)

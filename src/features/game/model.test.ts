@@ -15,6 +15,10 @@ import {
   storedGameRecordAtom,
   type StoredGameActorControls,
 } from '@/shared/storage/gameSessionStorage'
+import {
+  DEFAULT_TEST_VAULT_SECRETS,
+  setupTestVault,
+} from '@/test/credentialVault'
 import { createGameModel } from './model'
 
 function createRequiredStoredGame(
@@ -84,9 +88,10 @@ function createSavedGame({
 }
 
 describe('createGameModel', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     clearStoredGameArchive()
     window.localStorage.clear()
+    await setupTestVault()
   })
 
   afterEach(() => {
@@ -490,7 +495,7 @@ describe('createGameModel', () => {
         side: 'white',
         actorKey: 'openai',
         actorConfig: expect.objectContaining({
-          apiKey: 'sk-white',
+          apiKey: DEFAULT_TEST_VAULT_SECRETS.openai,
           model: DEFAULT_OPENAI_MODEL,
         }),
       }),
@@ -498,7 +503,7 @@ describe('createGameModel', () => {
         side: 'black',
         actorKey: 'openai',
         actorConfig: expect.objectContaining({
-          apiKey: 'sk-black',
+          apiKey: DEFAULT_TEST_VAULT_SECRETS.openai,
           model: 'custom-openai-model',
           reasoningEffort: 'medium',
         }),
