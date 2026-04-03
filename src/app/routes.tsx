@@ -14,6 +14,7 @@ import {
 import {
   activeGameIdAtom,
   activeStoredGameSummaryAtom,
+  ensureStoredGameArchiveInitialized,
   readStoredGameRecord,
   readStoredGameSummary,
   setActiveGameId,
@@ -227,6 +228,8 @@ export const gameRoute = rootRoute.reatomRoute({
 }, 'routes.game')
 
 effect(() => {
+  ensureStoredGameArchiveInitialized()
+
   const currentUrl = urlAtom()
 
   if (currentUrl.pathname !== '/game') {

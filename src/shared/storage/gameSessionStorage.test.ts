@@ -1,4 +1,3 @@
-import { peek } from '@reatom/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultSideConfig } from '@/actors/registry'
 import {
@@ -8,6 +7,8 @@ import {
   replayStoredGameRecord,
   saveStoredGameRecord,
   setActiveGameId,
+  ensureStoredGameArchiveInitialized,
+  resetStoredGameArchiveInitializationForTests,
   storedGameArchiveAtom,
   storedGameRecordAtom,
   storedGameSummariesAtom,
@@ -17,6 +18,19 @@ import {
 } from './gameSessionStorage'
 
 const GAMES_STORAGE_KEY = 'ai-chess-battle.games'
+const LEGACY_STORAGE_KEY = 'ai-chess-battle.game-session'
+
+function createLegacySessionSnapshot(): string {
+  return JSON.stringify({
+    version: 1,
+    config: {
+      white: createDefaultSideConfig('human'),
+      black: createDefaultSideConfig('human'),
+    },
+    moves: ['e2e4', 'e7e5'],
+    updatedAt: 1,
+  })
+}
 
 function createRequiredStoredGame(
   ...args: Parameters<typeof createStoredGame>
@@ -41,8 +55,8 @@ describe('gameSessionStorage', () => {
   })
 
   it('starts empty when there are no saved games', () => {
-    expect(peek(storedGamesAtom)).toEqual([])
-    expect(peek(activeGameIdAtom)).toBeNull()
+    expect(storedGamesAtom()).toEqual([])
+    expect(activeGameIdAtom()).toBeNull()
   })
 
   it('creates multiple saved games instead of overwriting the previous one', () => {
@@ -61,9 +75,41 @@ describe('gameSessionStorage', () => {
       moves: ['d2d4'],
     })
 
-    expect(peek(storedGamesAtom)).toHaveLength(2)
-    expect(peek(storedGameRecordAtom(firstGame.id))?.moves).toEqual(['e2e4'])
-    expect(peek(storedGameRecordAtom(secondGame.id))?.moves).toEqual(['d2d4'])
+    expect(storedGamesAtom()).toHaveLength(2)
+    expect(storedGameRecordAtom(firstGame.id)()?.moves).toEqual(['e2e4'])
+    expect(storedGameRecordAtom(secondGame.id)()?.moves).toEqual(['d2d4'])
+  })
+
+  it('bootstraps legacy storage on import without mutating reactive reads', async () => {
+    window.localStorage.setItem(LEGACY_STORAGE_KEY, createLegacySessionSnapshot())
+
+    resetStoredGameArchiveInitializationForTests()
+    ensureStoredGameArchiveInitialized()
+    const archiveSetSpy = vi.spyOn(storedGameArchiveAtom, 'set')
+
+    const games = storedGamesAtom()
+
+    expect(games).toHaveLength(1)
+    expect(activeGameIdAtom()).toBe(games[0]?.id ?? null)
+    expect(window.localStorage.getItem(GAMES_STORAGE_KEY)).toBeTruthy()
+    expect(window.localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
+    expect(archiveSetSpy).not.toHaveBeenCalled()
+  })
+
+  it('keeps the archive initializer idempotent after bootstrap', () => {
+    window.localStorage.setItem(LEGACY_STORAGE_KEY, createLegacySessionSnapshot())
+
+    resetStoredGameArchiveInitializationForTests()
+    ensureStoredGameArchiveInitialized()
+    const archiveBefore = storedGameArchiveAtom()
+    const archiveSetSpy = vi.spyOn(storedGameArchiveAtom, 'set')
+    const removeItemSpy = vi.spyOn(window.localStorage, 'removeItem')
+
+    ensureStoredGameArchiveInitialized()
+
+    expect(archiveSetSpy).not.toHaveBeenCalled()
+    expect(removeItemSpy).not.toHaveBeenCalled()
+    expect(storedGameArchiveAtom()).toBe(archiveBefore)
   })
 
   it('persists actor controls on saved game records', () => {
@@ -79,7 +125,7 @@ describe('gameSessionStorage', () => {
       },
     })
 
-    expect(peek(storedGameRecordAtom(game.id))?.actorControls).toEqual({
+    expect(storedGameRecordAtom(game.id)()?.actorControls).toEqual({
       openai: {
         waitForConfirmation: true,
       },
@@ -149,7 +195,7 @@ describe('gameSessionStorage', () => {
     )
   })
 
-  it('sorts summaries by last update time', async () => {
+  it('sorts summaries by last update time', () => {
     const olderGame = createRequiredStoredGame({
       config: {
         white: createDefaultSideConfig('human'),
@@ -165,8 +211,8 @@ describe('gameSessionStorage', () => {
       moves: ['d2d4'],
     })
 
-    const olderRecord = peek(storedGameRecordAtom(olderGame.id))
-    const newerRecord = peek(storedGameRecordAtom(newerGame.id))
+    const olderRecord = storedGameRecordAtom(olderGame.id)()
+    const newerRecord = storedGameRecordAtom(newerGame.id)()
 
     if (!olderRecord || !newerRecord) {
       throw new Error('Expected saved records to be available in test.')
@@ -183,10 +229,10 @@ describe('gameSessionStorage', () => {
       }),
     )
 
-    vi.resetModules()
-    const { storedGameSummariesAtom } = await import('./gameSessionStorage')
+    resetStoredGameArchiveInitializationForTests()
+    ensureStoredGameArchiveInitialized()
 
-    expect(peek(storedGameSummariesAtom).map((game) => game.id)).toEqual([
+    expect(storedGameSummariesAtom().map((game) => game.id)).toEqual([
       newerGame.id,
       olderGame.id,
     ])
@@ -219,8 +265,8 @@ describe('gameSessionStorage', () => {
 
     setActiveGameId(game.id)
 
-    expect(peek(activeGameIdAtom)).toBe(game.id)
-    expect(peek(storedGameSummariesAtom)[0]?.id).toBe(game.id)
+    expect(activeGameIdAtom()).toBe(game.id)
+    expect(storedGameSummariesAtom()[0]?.id).toBe(game.id)
   })
 
   it('does not rewrite the archive when the active game id is unchanged', () => {
@@ -233,22 +279,22 @@ describe('gameSessionStorage', () => {
 
     setActiveGameId(game.id)
 
-    const archiveBefore = peek(storedGameArchiveAtom)
+    const archiveBefore = storedGameArchiveAtom()
     const setSpy = vi.spyOn(storedGameArchiveAtom, 'set')
 
     setActiveGameId(game.id)
 
     expect(setSpy).not.toHaveBeenCalled()
-    expect(peek(storedGameArchiveAtom)).toBe(archiveBefore)
+    expect(storedGameArchiveAtom()).toBe(archiveBefore)
   })
 
   it('does not rewrite the archive when clearing an already empty active game id', () => {
-    const archiveBefore = peek(storedGameArchiveAtom)
+    const archiveBefore = storedGameArchiveAtom()
     const setSpy = vi.spyOn(storedGameArchiveAtom, 'set')
 
     setActiveGameId(null)
 
     expect(setSpy).not.toHaveBeenCalled()
-    expect(peek(storedGameArchiveAtom)).toBe(archiveBefore)
+    expect(storedGameArchiveAtom()).toBe(archiveBefore)
   })
 })
