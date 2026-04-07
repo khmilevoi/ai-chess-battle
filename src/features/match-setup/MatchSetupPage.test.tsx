@@ -31,6 +31,15 @@ describe('MatchSetupPage', () => {
     expect(screen.getByText('Configuration error for white / anthropic.')).toBeInTheDocument()
     expect(screen.getByText('Configuration error for black / google.')).toBeInTheDocument()
     expect(screen.getAllByText('API key is required').length).toBe(2)
+    expect(screen.getAllByLabelText('API key')).toSatisfy((inputs) =>
+      inputs.every(
+        (input: Element) => input instanceof HTMLInputElement && input.disabled,
+      ),
+    )
+    expect(
+      screen.getAllByText('Create the vault to save this API key.').length,
+    ).toBe(2)
+    expect(screen.getAllByRole('button', { name: 'Set up vault' }).length).toBe(2)
     expect(screen.getByRole('button', { name: 'Start Match' })).toBeDisabled()
   })
 })

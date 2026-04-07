@@ -1,10 +1,13 @@
+import { Button } from '@/shared/ui/Button'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
+import { openCredentialVaultDialog } from '@/app/credentialVaultDialogState'
 import {
   clearSecret,
   setSecret,
   vaultSecretsAtom,
   vaultStatusAtom,
 } from '@/shared/storage/credentialVault'
+import styles from './providerSettings.module.css'
 
 export type AiProviderModelOption = {
   value: string
@@ -59,12 +62,18 @@ export const AiProviderSettings = reatomMemo(({
   const storedSecret = vaultSecretsAtom()[actorKey] ?? ''
   const vaultHint =
     vaultStatus === 'unconfigured'
-      ? 'Set a master password in the header to store API keys.'
+      ? 'Create the vault to save this API key.'
       : vaultStatus === 'locked'
-      ? 'Unlock the vault in the header to edit this API key.'
+      ? 'Unlock the vault to edit this API key.'
       : storedSecret.length > 0
       ? 'Stored in the encrypted local vault for this browser profile.'
       : 'Enter an API key to save it in the encrypted local vault.'
+  const vaultActionLabel =
+    vaultStatus === 'unconfigured'
+      ? 'Set up vault'
+      : vaultStatus === 'locked'
+      ? 'Unlock vault'
+      : null
 
   return (
     <div>
@@ -91,11 +100,29 @@ export const AiProviderSettings = reatomMemo(({
           }}
           autoComplete="off"
           spellCheck={false}
-          placeholder={vaultStatus === 'unlocked' ? '' : 'Unlock vault to edit'}
+          placeholder={
+            vaultStatus === 'unconfigured'
+              ? 'Set up vault to edit'
+              : vaultStatus === 'locked'
+              ? 'Unlock vault to edit'
+              : ''
+          }
         />
       </label>
       <FieldErrorList errors={errors.apiKey} />
-      <p>{vaultHint}</p>
+      <div className={styles.vaultAssist}>
+        <p className={styles.vaultHint}>{vaultHint}</p>
+        {vaultActionLabel ? (
+          <Button
+            className={styles.vaultAction}
+            onClick={() => {
+              openCredentialVaultDialog()
+            }}
+          >
+            {vaultActionLabel}
+          </Button>
+        ) : null}
+      </div>
       <label>
         <span>Model</span>
         <select

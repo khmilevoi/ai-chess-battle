@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { peek, urlAtom } from '@reatom/core'
@@ -17,8 +17,8 @@ import {
 } from '@/shared/storage/gameSessionStorage'
 import { storedMatchConfig } from '@/shared/storage/matchConfigStorage'
 import { clearStoredActorConfigMap } from '@/shared/storage/actorConfigStorage'
-import { resetVault } from '@/shared/storage/credentialVault'
-import { setupTestVault } from '@/test/credentialVault'
+import { lockVault, resetVault } from '@/shared/storage/credentialVault'
+import { setupTestVault, TEST_MASTER_PASSWORD } from '@/test/credentialVault'
 import { gameRoute, setupRoute } from './routes'
 import { App } from './App'
 
@@ -118,7 +118,8 @@ describe('App integration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders the setup route on root path', async () => {
+  it('opens the vault setup dialog from the header and closes it after setup', async () => {
+    const user = userEvent.setup()
     resetVault()
     window.localStorage.clear()
 
@@ -131,8 +132,139 @@ describe('App integration', () => {
     expect(screen.getByRole('button', { name: 'Setup' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Games' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'No vault configured' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Set up vault' }))
+
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: 'Set up credential vault' },
+      { timeout: 5000 },
+    )
+
+    await user.type(within(dialog).getByLabelText('Master password'), TEST_MASTER_PASSWORD)
+    await user.type(
+      within(dialog).getByLabelText('Confirm password'),
+      TEST_MASTER_PASSWORD,
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Set up vault' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('heading', { name: 'Vault unlocked' })).toBeInTheDocument()
+    expect(screen.getByText('Credential vault is ready in this tab.')).toBeInTheDocument()
+  }, 15000)
+
+  it('disables provider API key inputs until the vault is unlocked from provider settings', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
+    const actorSelects = screen.getAllByLabelText('Actor')
+    await user.selectOptions(actorSelects[0]!, 'openai')
+    await user.selectOptions(actorSelects[1]!, 'anthropic')
+
+    await user.click(screen.getByRole('button', { name: 'Manage vault' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Lock vault' }, { timeout: 5000 }),
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    const apiKeyInputs = screen.getAllByLabelText('API key')
+    expect(apiKeyInputs).toHaveLength(2)
+    expect(apiKeyInputs).toSatisfy((inputs) =>
+      inputs.every(
+        (input: Element) => input instanceof HTMLInputElement && input.disabled,
+      ),
+    )
     expect(
-      screen.getByRole('button', { name: 'Set master password' }),
+      screen.getAllByText('Unlock the vault to edit this API key.').length,
+    ).toBe(2)
+
+    const providerHint = screen.getAllByText('Unlock the vault to edit this API key.')[0]
+    const providerActions = providerHint.closest('div')
+
+    if (!providerActions) {
+      throw new Error('Expected the provider hint to be wrapped with an action container.')
+    }
+
+    await user.click(within(providerActions).getByRole('button', { name: 'Unlock vault' }))
+
+    const unlockDialog = await screen.findByRole(
+      'dialog',
+      { name: 'Unlock credential vault' },
+      { timeout: 5000 },
+    )
+
+    await user.type(
+      within(unlockDialog).getByLabelText('Master password'),
+      TEST_MASTER_PASSWORD,
+    )
+    await user.click(within(unlockDialog).getByRole('button', { name: 'Unlock vault' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    expect(
+      screen
+        .getAllByLabelText('API key')
+        .every((input: Element) => !input.hasAttribute('disabled')),
+    ).toBe(true)
+  }, 15000)
+
+  it('keeps the reset flow inside the modal after clearing the vault', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Manage vault' }, { timeout: 5000 })
+    await user.click(screen.getByRole('button', { name: 'Manage vault' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Reset vault' }, { timeout: 5000 }),
+    )
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Reset the encrypted vault? Stored API keys will be removed and must be entered again.',
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Set up credential vault' }, { timeout: 5000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No vault configured' })).toBeInTheDocument()
+    expect(screen.getByText('Credential vault reset.')).toBeInTheDocument()
+  })
+
+  it('shows unlock errors inside the dialog and keeps the vault locked', async () => {
+    const user = userEvent.setup()
+
+    lockVault()
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Unlock vault' }, { timeout: 5000 })
+    await user.click(screen.getByRole('button', { name: 'Unlock vault' }))
+
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: 'Unlock credential vault' },
+      { timeout: 5000 },
+    )
+
+    await user.type(within(dialog).getByLabelText('Master password'), 'wrong-password')
+    await user.click(within(dialog).getByRole('button', { name: 'Unlock vault' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Unlock credential vault' })).toBe(dialog)
+    expect(screen.getByRole('heading', { name: 'Vault locked' })).toBeInTheDocument()
+    expect(
+      await within(dialog).findByText(
+        'Saved configuration could not be loaded. Defaults were restored.',
+      ),
     ).toBeInTheDocument()
   })
 

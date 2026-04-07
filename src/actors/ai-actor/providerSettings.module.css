@@ -1,0 +1,13 @@
+.vaultAssist {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.vaultHint {
+  margin: 0;
+}
+
+.vaultAction {
+  width: fit-content;
+}

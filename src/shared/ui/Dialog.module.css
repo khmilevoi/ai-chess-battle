@@ -1,0 +1,58 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(5 5 5 / 0.45);
+}
+
+.panel {
+  width: min(100%, 560px);
+  max-height: min(100vh - 48px, 720px);
+  overflow: auto;
+  border: 1px solid #050505;
+  background: #ffffff;
+  box-shadow: 8px 8px 0 #050505;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  padding: 18px 18px 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+
+.body {
+  padding: 18px;
+}
+
+.closeButton {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .overlay {
+    padding: 12px;
+  }
+
+  .panel {
+    max-height: min(100vh - 24px, 720px);
+  }
+
+  .header {
+    padding: 16px 16px 0;
+  }
+
+  .body {
+    padding: 16px;
+  }
+}
