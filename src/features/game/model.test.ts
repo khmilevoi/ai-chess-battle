@@ -15,8 +15,10 @@ import {
   storedGameRecordAtom,
   type StoredGameActorControls,
 } from '@/shared/storage/gameSessionStorage'
+import { lockVault, unlockVault } from '@/shared/storage/credentialVault'
 import {
   DEFAULT_TEST_VAULT_SECRETS,
+  TEST_MASTER_PASSWORD,
   setupTestVault,
 } from '@/test/credentialVault'
 import { createGameModel } from './model'
@@ -223,6 +225,44 @@ describe('createGameModel', () => {
     expect(model.snapshot()?.history).toEqual(['e2e4'])
     expect(model.phase()).toBe('playing')
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reactively recovers initialization after the vault unlocks', async () => {
+    await setupTestVault({
+      openai: DEFAULT_TEST_VAULT_SECRETS.openai,
+    })
+    lockVault()
+
+    const game = createSavedGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: {
+          actorKey: 'openai',
+          actorConfig: {
+            apiKey: 'sk-ignored-by-redaction',
+            model: DEFAULT_OPENAI_MODEL,
+            reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+          },
+        },
+      },
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeInstanceOf(Error)
+    expect(model.snapshot()).toBeNull()
+    expect(model.phase()).toBe('actorError')
+
+    expect(await unlockVault(TEST_MASTER_PASSWORD)).toBeNull()
+    await waitForCondition(() => model.snapshot() !== null && model.phase() === 'playing')
+
+    expect(model.runtimeError()).toBeNull()
+    expect(model.snapshot()?.turn).toBe('white')
+    expect(model.activeHumanActor()).not.toBeNull()
   })
 
   it('pauses live play while reviewing history and resumes from the latest move', async () => {

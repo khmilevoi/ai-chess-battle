@@ -7,7 +7,6 @@ import {
   type MatchSideConfig,
   type RegisteredActor,
 } from '@/actors/registry'
-import { getSecret } from './credentialVault'
 
 type StoredActorConfigFor<Key extends ActorKey> = [RegisteredActor<Key>['secretField']] extends [
   keyof ActorConfigMap[Key],
@@ -31,6 +30,8 @@ export type StoredMatchConfig = {
 export type StoredActorConfigMap = Partial<{
   [Key in ActorKey]: StoredActorConfigFor<Key>
 }>
+
+export type VaultSecretsByActorKey = Partial<Record<ActorKey, string>>
 
 const SECRET_PLACEHOLDER = '__credential-vault__'
 
@@ -65,6 +66,7 @@ export function redactSecrets<Key extends ActorKey>(
 export function resolveRuntimeConfig<Key extends ActorKey>(
   actorKey: Key,
   config: StoredActorConfigFor<Key>,
+  secretsByActorKey: VaultSecretsByActorKey,
 ): ActorConfigMap[Key] {
   const descriptor = getRegisteredActor(actorKey)
 
@@ -74,7 +76,7 @@ export function resolveRuntimeConfig<Key extends ActorKey>(
 
   return {
     ...(config as Record<string, unknown>),
-    [descriptor.secretField]: getSecret(actorKey) ?? '',
+    [descriptor.secretField]: secretsByActorKey[actorKey] ?? '',
   } as ActorConfigMap[Key]
 }
 
@@ -91,13 +93,17 @@ export function redactMatchConfig(config: MatchConfig): StoredMatchConfig {
   }
 }
 
-export function resolveStoredMatchConfig(config: StoredMatchConfig): MatchConfig {
+export function resolveStoredMatchConfig(
+  config: StoredMatchConfig,
+  secretsByActorKey: VaultSecretsByActorKey,
+): MatchConfig {
   return {
     white: {
       actorKey: config.white.actorKey,
       actorConfig: resolveRuntimeConfig(
         config.white.actorKey,
         config.white.actorConfig as never,
+        secretsByActorKey,
       ),
     } as MatchSideConfig,
     black: {
@@ -105,6 +111,7 @@ export function resolveStoredMatchConfig(config: StoredMatchConfig): MatchConfig
       actorConfig: resolveRuntimeConfig(
         config.black.actorKey,
         config.black.actorConfig as never,
+        secretsByActorKey,
       ),
     } as MatchSideConfig,
   } as MatchConfig
@@ -160,14 +167,17 @@ export function normalizeStoredActorConfigMapValue(
   return Object.fromEntries(normalizedEntries) as StoredActorConfigMap
 }
 
-export function resolveStoredActorConfigMap(configMap: StoredActorConfigMap) {
+export function resolveStoredActorConfigMap(
+  configMap: StoredActorConfigMap,
+  secretsByActorKey: VaultSecretsByActorKey,
+) {
   return Object.fromEntries(
     Object.entries(configMap).flatMap(([key, config]) => {
       if (!isActorKey(key) || config === undefined) {
         return []
       }
 
-      return [[key, resolveRuntimeConfig(key, config as never)]]
+      return [[key, resolveRuntimeConfig(key, config as never, secretsByActorKey)]]
     }),
   ) as Partial<ActorConfigMap>
 }
@@ -230,7 +240,7 @@ export function normalizeStoredMatchConfigValue(value: unknown): MatchConfig | n
     return null
   }
 
-  return resolveStoredMatchConfig(normalized)
+  return resolveStoredMatchConfig(normalized, {})
 }
 
 export function redactSideConfig<Key extends ActorKey>(
@@ -244,9 +254,14 @@ export function redactSideConfig<Key extends ActorKey>(
 
 export function resolveStoredSideConfig<Key extends ActorKey>(
   sideConfig: StoredSideConfig<Key>,
+  secretsByActorKey: VaultSecretsByActorKey,
 ): MatchSideConfig<Key> {
   return {
     actorKey: sideConfig.actorKey as Key,
-    actorConfig: resolveRuntimeConfig(sideConfig.actorKey, sideConfig.actorConfig),
+    actorConfig: resolveRuntimeConfig(
+      sideConfig.actorKey,
+      sideConfig.actorConfig,
+      secretsByActorKey,
+    ),
   } as MatchSideConfig<Key>
 }

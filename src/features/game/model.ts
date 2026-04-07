@@ -4,6 +4,7 @@ import {
   action,
   atom,
   computed,
+  effect,
   peek,
   reatomEnum,
   withAbort,
@@ -250,6 +251,10 @@ export function createGameModel({
   const historyCursor = atom(0, `${name}.historyCursor`)
   const selectedSquare = atom<Square | null>(null, `${name}.selectedSquare`)
   const runtimeError = atom<Error | null>(null, `${name}.runtimeError`)
+  const startupBlockedConfigSignature = atom<string | null>(
+    null,
+    `${name}.startupBlockedConfigSignature`,
+  )
   const turnActivity = reatomEnum(['idle', 'awaitingActor', 'applyingMove'], {
     name: `${name}.turnActivity`,
     initState: 'idle',
@@ -374,6 +379,11 @@ export function createGameModel({
       !isTerminalStatus(currentSnapshot.status)
     )
   }, `${name}.canContinueFromCurrentMove`)
+  const storedGameConfigSignature = computed(() => {
+    const currentGame = storedGame()
+
+    return currentGame === null ? null : JSON.stringify(currentGame.config)
+  }, `${name}.storedGameConfigSignature`)
   const historyMoves = computed(() => {
     const currentGame = storedGame()
     const cursor = historyCursor()
@@ -658,6 +668,7 @@ export function createGameModel({
     historyCursor.set(0)
     selectedSquare.set(null)
     runtimeError.set(null)
+    startupBlockedConfigSignature.set(null)
     phase.setPending()
     return null
   }, `${name}.resetState`)
@@ -961,11 +972,14 @@ export function createGameModel({
     const currentGame = peek(storedGameRecordAtom(gameId))
 
     if (currentGame === null) {
+      startupBlockedConfigSignature.set(null)
       const error = createMissingGameError(gameId)
       runtimeError.set(error)
       phase.setActorError()
       return error
     }
+
+    const currentConfigSignature = JSON.stringify(currentGame.config)
 
     const nextActors = createSideActors(
       currentGame.config,
@@ -976,11 +990,15 @@ export function createGameModel({
     )
 
     if (nextActors instanceof Error) {
+      startupBlockedConfigSignature.set(
+        nextActors instanceof CredentialError ? currentConfigSignature : null,
+      )
       runtimeError.set(nextActors)
       phase.setActorError()
       return nextActors
     }
 
+    startupBlockedConfigSignature.set(null)
     actors.set(nextActors)
     const restoredSnapshot = syncPositionFromHistory(currentGame.moves.length)
 
@@ -997,6 +1015,25 @@ export function createGameModel({
     void runMatchLoop()
     return null
   }, `${name}.startMatch`)
+
+  effect(() => {
+    const currentSignature = storedGameConfigSignature()
+    const blockedSignature = startupBlockedConfigSignature()
+    const currentPhase = phase()
+    const currentError = runtimeError()
+
+    if (
+      currentSignature === null ||
+      blockedSignature === null ||
+      currentSignature === blockedSignature ||
+      currentPhase !== 'actorError' ||
+      !(currentError instanceof CredentialError)
+    ) {
+      return
+    }
+
+    void startMatch()
+  }, `${name}.retryStartupOnCredentialChange`)
 
   const retryTurn = action(() => {
     if (phase() !== 'actorError' || !canContinueFromCurrentMove()) {

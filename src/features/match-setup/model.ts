@@ -1,4 +1,4 @@
-import { action, atom, computed } from '@reatom/core'
+import { action, atom, computed, peek } from '@reatom/core'
 import { ActorError } from '@/shared/errors'
 import {
   createDefaultSideConfig,
@@ -15,6 +15,7 @@ import {
   readStoredActorConfig,
   saveStoredActorConfig,
 } from '@/shared/storage/actorConfigStorage'
+import { vaultSecretsAtom } from '@/shared/storage/credentialVault'
 import {
   activeStoredGameSummaryAtom,
   createStoredGame,
@@ -69,11 +70,11 @@ export function createMatchSetupModel({
   )
   const setupError = atom<Error | null>(null, `${name}.setupError`)
   const whiteSideConfig = computed(
-    () => resolveStoredSideConfig(whiteSideConfigState()),
+    () => resolveStoredSideConfig(whiteSideConfigState(), vaultSecretsAtom()),
     `${name}.white`,
   )
   const blackSideConfig = computed(
-    () => resolveStoredSideConfig(blackSideConfigState()),
+    () => resolveStoredSideConfig(blackSideConfigState(), vaultSecretsAtom()),
     `${name}.black`,
   )
 
@@ -122,7 +123,7 @@ export function createMatchSetupModel({
         blackSideConfigState.set(next)
       }
 
-      return resolveStoredSideConfig(next)
+      return resolveStoredSideConfig(next, peek(vaultSecretsAtom))
     }
 
     blackSideConfigState.set(next)
@@ -131,7 +132,7 @@ export function createMatchSetupModel({
       whiteSideConfigState.set(next)
     }
 
-    return resolveStoredSideConfig(next)
+    return resolveStoredSideConfig(next, peek(vaultSecretsAtom))
   }, `${name}.setSideActor`)
 
   const updateSideConfig = action(

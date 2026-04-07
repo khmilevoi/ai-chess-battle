@@ -9,6 +9,7 @@ import {
   type UciMove,
 } from '@/domain/chess/types'
 import { StorageError } from '../errors'
+import { vaultSecretsAtom } from './credentialVault'
 import {
   normalizeStoredMatchConfigSnapshotValue,
   redactMatchConfig,
@@ -237,10 +238,11 @@ function normalizeStoredGameArchiveValue(
 
 function resolveStoredGameRecord(
   record: StoredGameRecordSnapshot,
+  secretsByActorKey: ReturnType<typeof vaultSecretsAtom>,
 ): StoredGameRecord {
   return {
     ...record,
-    config: resolveStoredMatchConfig(record.config),
+    config: resolveStoredMatchConfig(record.config, secretsByActorKey),
   }
 }
 
@@ -296,7 +298,9 @@ function createMigratedArchive(
     createdAt: legacySession.updatedAt,
     updatedAt: legacySession.updatedAt,
   }
-  const summary = summarizeStoredGameRecord(resolveStoredGameRecord(migratedRecord))
+  const summary = summarizeStoredGameRecord(
+    resolveStoredGameRecord(migratedRecord, peek(vaultSecretsAtom)),
+  )
 
   return {
     version: STORAGE_DATA_VERSION,
@@ -440,7 +444,10 @@ function shouldActivateStoredGame(record: StoredGameRecord): boolean {
 }
 
 export const storedGamesAtom = computed(
-  () => loadGameArchive().games.map((record) => resolveStoredGameRecord(record)),
+  () =>
+    loadGameArchive().games.map((record) =>
+      resolveStoredGameRecord(record, vaultSecretsAtom()),
+    ),
   'storage.gameArchive.games',
 )
 
@@ -465,7 +472,7 @@ export function storedGameRecordAtom(gameId: string) {
     () => {
       const record = getStoredGameRecord(loadGameArchive().games, gameId)
 
-      return record === null ? null : resolveStoredGameRecord(record)
+      return record === null ? null : resolveStoredGameRecord(record, vaultSecretsAtom())
     },
     `storage.gameRecord(${gameId})`,
   )
@@ -477,7 +484,7 @@ export function storedGameRecordAtom(gameId: string) {
 export function readStoredGameRecord(gameId: string): StoredGameRecord | null {
   const record = getStoredGameRecord(readGameArchive().games, gameId)
 
-  return record === null ? null : resolveStoredGameRecord(record)
+  return record === null ? null : resolveStoredGameRecord(record, peek(vaultSecretsAtom))
 }
 
 const storedGameSummaryAtomCache = new Map<
@@ -555,7 +562,7 @@ export function createStoredGameRecord({
     moves,
   })
 
-  return resolveStoredGameRecord(snapshot)
+  return resolveStoredGameRecord(snapshot, peek(vaultSecretsAtom))
 }
 
 function createStoredGameRecordSnapshot({
@@ -625,7 +632,7 @@ export function saveStoredGameRecord(
     const nextGames = current.games.some((game) => game.id === normalized.id)
       ? current.games.map((game) => (game.id === normalized.id ? normalized : game))
       : [...current.games, normalized]
-    const resolvedRecord = resolveStoredGameRecord(normalized)
+    const resolvedRecord = resolveStoredGameRecord(normalized, peek(vaultSecretsAtom))
 
     return {
       ...current,
@@ -640,7 +647,7 @@ export function saveStoredGameRecord(
     }
   })
 
-  return resolveStoredGameRecord(normalized)
+  return resolveStoredGameRecord(normalized, peek(vaultSecretsAtom))
 }
 
 export function updateStoredGameRecord({
@@ -683,7 +690,7 @@ export function updateStoredGameRecord({
     games: current.games.map((game) => (game.id === normalized.id ? normalized : game)),
   }))
 
-  return resolveStoredGameRecord(normalized)
+  return resolveStoredGameRecord(normalized, peek(vaultSecretsAtom))
 }
 
 export function clearStoredGameArchive(): void {

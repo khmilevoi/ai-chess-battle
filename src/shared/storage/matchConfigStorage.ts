@@ -1,6 +1,7 @@
 import { atom, peek, withActions, withLocalStorage } from '@reatom/core'
 import { createDefaultMatchConfig } from '@/actors/registry'
 import type { MatchConfig } from '@/actors/registry'
+import { vaultSecretsAtom } from './credentialVault'
 import {
   normalizeStoredMatchConfigSnapshotValue,
   redactMatchConfig,
@@ -53,13 +54,17 @@ export const storedMatchConfig = storedMatchConfigSnapshotAtom.extend(
 export function loadStoredMatchConfig(): MatchConfig | null {
   const storedConfig = storedMatchConfig()
 
-  return storedConfig === null ? null : resolveStoredMatchConfig(storedConfig)
+  return storedConfig === null
+    ? null
+    : resolveStoredMatchConfig(storedConfig, vaultSecretsAtom())
 }
 
 export function readStoredMatchConfig(): MatchConfig | null {
   const storedConfig = peek(storedMatchConfig)
 
-  return storedConfig === null ? null : resolveStoredMatchConfig(storedConfig)
+  return storedConfig === null
+    ? null
+    : resolveStoredMatchConfig(storedConfig, peek(vaultSecretsAtom))
 }
 
 export function fallbackMatchConfig(): MatchConfig {

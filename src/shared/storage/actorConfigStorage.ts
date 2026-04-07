@@ -4,6 +4,7 @@ import {
   type ActorConfigMap,
   type ActorKey,
 } from '@/actors/registry'
+import { vaultSecretsAtom } from './credentialVault'
 import {
   normalizeStoredActorConfigMapValue,
   redactSecrets,
@@ -57,12 +58,16 @@ const storedActorConfigSnapshotAtom = atom<StoredActorConfigMap>(
 )
 
 const storedActorConfigMap = computed(
-  () => resolveStoredActorConfigMap(storedActorConfigSnapshotAtom()),
+  () => resolveStoredActorConfigMap(storedActorConfigSnapshotAtom(), vaultSecretsAtom()),
   'storage.actorConfigMap',
 )
 
 function readResolvedActorConfigMap() {
-  const resolvedFromAtom = resolveStoredActorConfigMap(storedActorConfigSnapshotAtom())
+  const secretsByActorKey = peek(vaultSecretsAtom)
+  const resolvedFromAtom = resolveStoredActorConfigMap(
+    storedActorConfigSnapshotAtom(),
+    secretsByActorKey,
+  )
 
   if (
     Object.keys(resolvedFromAtom).length > 0 ||
@@ -71,7 +76,7 @@ function readResolvedActorConfigMap() {
     return resolvedFromAtom
   }
 
-  return resolveStoredActorConfigMap(readSnapshotFromStorage())
+  return resolveStoredActorConfigMap(readSnapshotFromStorage(), secretsByActorKey)
 }
 
 export function loadStoredActorConfig<K extends ActorKey>(
@@ -86,7 +91,7 @@ export function readStoredActorConfig<K extends ActorKey>(
   const resolvedFromAtom = peek(storedActorConfigMap)
   const resolvedConfig =
     (resolvedFromAtom[actorKey] as ActorConfigMap[K] | undefined) ??
-    (resolveStoredActorConfigMap(readSnapshotFromStorage())[actorKey] as
+    (resolveStoredActorConfigMap(readSnapshotFromStorage(), peek(vaultSecretsAtom))[actorKey] as
       | ActorConfigMap[K]
       | undefined)
 

@@ -7,7 +7,13 @@ import {
   clearStoredActorConfigMap,
   loadStoredActorConfig,
 } from '@/shared/storage/actorConfigStorage'
-import { resetVault } from '@/shared/storage/credentialVault'
+import {
+  lockVault,
+  resetVault,
+  setSecret,
+  setupVault,
+  unlockVault,
+} from '@/shared/storage/credentialVault'
 import {
   activeGameIdAtom,
   clearStoredGameArchive,
@@ -17,7 +23,7 @@ import {
   loadStoredMatchConfig,
   storedMatchConfig,
 } from '@/shared/storage/matchConfigStorage'
-import { setupTestVault } from '@/test/credentialVault'
+import { setupTestVault, TEST_MASTER_PASSWORD } from '@/test/credentialVault'
 import { createMatchSetupModel } from './model'
 
 function getLoadedConfig(): MatchConfig {
@@ -85,6 +91,39 @@ describe('createMatchSetupModel', () => {
     expect(model.setupError()).toBeInstanceOf(Error)
     expect(model.canStart()).toBe(false)
     expect(goToGame).not.toHaveBeenCalled()
+  })
+
+  it('reactively revalidates an AI side when the vault unlocks', async () => {
+    expect(await setupVault(TEST_MASTER_PASSWORD)).toBeNull()
+    expect(await setSecret('openai', 'sk-reactive-unlock')).toBeNull()
+    lockVault()
+
+    const model = createMatchSetupModel({
+      name: `test-setup-${crypto.randomUUID()}`,
+      initialConfig: {
+        white: createDefaultSideConfig('openai'),
+        black: createDefaultSideConfig('human'),
+      },
+      goToGame: vi.fn(),
+      goToGames: vi.fn(),
+    })
+
+    expect(model.whiteValidation().error).toBeInstanceOf(Error)
+    expect(model.canStart()).toBe(false)
+
+    expect(await unlockVault(TEST_MASTER_PASSWORD)).toBeNull()
+
+    expect(model.whiteValidation().error).toBeNull()
+    const whiteSideConfig = model.whiteSideConfig()
+
+    expect(whiteSideConfig.actorKey).toBe('openai')
+
+    if (whiteSideConfig.actorKey !== 'openai') {
+      throw new Error('Expected the white side to remain configured as OpenAI.')
+    }
+
+    expect(whiteSideConfig.actorConfig.apiKey).toBe('sk-reactive-unlock')
+    expect(model.canStart()).toBe(true)
   })
 
   it('creates a saved game and marks it active on successful start', async () => {
