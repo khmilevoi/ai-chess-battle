@@ -21,6 +21,7 @@ import {
 } from '@/shared/storage/gameSessionStorage'
 import { Button } from '@/shared/ui/Button'
 import { CredentialVaultControl } from './CredentialVaultControl'
+import { CredentialVaultDialog } from './CredentialVaultDialog'
 import styles from './App.module.css'
 
 function renderOutletChildren(outlet: () => ReactNode) {
@@ -95,6 +96,7 @@ export const rootRoute = reatomRoute({
           ) : (
             <div className={styles.routePlaceholder}>Redirecting…</div>
           )}
+          <CredentialVaultDialog />
         </div>
       </div>
     )
