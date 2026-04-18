@@ -313,22 +313,32 @@ function createMigratedArchive(
 export const storedGameArchiveAtom = atom<StoredGameArchiveSnapshot>(
   createEmptyArchive(),
   'storage.gameArchive',
-).extend(
-  withLocalStorage({
-    key: STORAGE_KEY,
-    version: STORAGE_VERSION,
-    migration: (persist) => {
-      return (
-        normalizeStoredGameArchiveValue(getPersistSnapshotValue(persist)) ??
-        createEmptyArchive()
-      )
-    },
-    fromSnapshot: (snapshot, state) => {
-      const normalized = normalizeStoredGameArchiveValue(snapshot)
-      return normalized ?? state ?? createEmptyArchive()
-    },
-  }),
 )
+
+// Debounced localStorage writer: the in-memory atom is always current for UI,
+// but disk writes are batched to at most one write per 200 ms.
+let archivePersistTimer: ReturnType<typeof setTimeout> | null = null
+
+function persistArchiveNow(archive: StoredGameArchiveSnapshot): void {
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ version: STORAGE_VERSION, data: archive }),
+    )
+  } catch {
+    // Storage quota exceeded or unavailable — fail silently.
+  }
+}
+
+function scheduleArchivePersist(archive: StoredGameArchiveSnapshot): void {
+  if (archivePersistTimer !== null) {
+    clearTimeout(archivePersistTimer)
+  }
+  archivePersistTimer = setTimeout(() => {
+    archivePersistTimer = null
+    persistArchiveNow(archive)
+  }, 200)
+}
 
 const legacyStoredGameSessionAtom = atom<LegacyStoredGameSession | null>(
   null,
@@ -365,7 +375,9 @@ export function ensureStoredGameArchiveInitialized(): void {
     currentLegacySession ?? readLegacyStoredGameSessionSnapshotFromStorage()
 
   if (legacySession !== null && isEmptyArchiveSnapshot(archiveSnapshot)) {
-    storedGameArchiveAtom.set(createMigratedArchive(legacySession))
+    const migratedArchive = createMigratedArchive(legacySession)
+    storedGameArchiveAtom.set(migratedArchive)
+    persistArchiveNow(migratedArchive)
     legacyStoredGameSessionAtom.set(null)
     window.localStorage.removeItem(LEGACY_STORAGE_KEY)
     archiveInitialized = true
@@ -403,6 +415,7 @@ function mapArchive(
 
   if (nextArchive !== currentArchive) {
     storedGameArchiveAtom.set(nextArchive)
+    scheduleArchivePersist(nextArchive)
   }
 
   return nextArchive
@@ -696,7 +709,9 @@ export function updateStoredGameRecord({
 export function clearStoredGameArchive(): void {
   storedGameRecordAtomCache.clear()
   storedGameSummaryAtomCache.clear()
-  storedGameArchiveAtom.set(createEmptyArchive())
+  const emptyArchive = createEmptyArchive()
+  storedGameArchiveAtom.set(emptyArchive)
+  persistArchiveNow(emptyArchive)
   legacyStoredGameSessionAtom.set(null)
 }
 

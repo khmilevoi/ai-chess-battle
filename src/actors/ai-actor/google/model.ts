@@ -1,5 +1,5 @@
-import { GoogleGenAI } from '@google/genai'
 import { named } from '@reatom/core'
+import type { GoogleGenAI as GoogleGenAIType } from '@google/genai'
 import {
   GoogleGenAiHttpError,
   GoogleGenAiResponseError,
@@ -25,6 +25,10 @@ import type { GoogleActorConfig } from './config.schema'
 
 const GOOGLE_ACTOR_THINKING_BUDGET = 128
 const GOOGLE_ACTOR_MAX_OUTPUT_TOKENS = 512
+
+type GoogleSdk = {
+  client: GoogleGenAIType
+}
 
 function hasHttpStatus(
   error: unknown,
@@ -56,7 +60,7 @@ function createGoogleResponseDiagnostics(response: {
 
 export class GoogleActorRuntime extends AiActor {
   private readonly config: GoogleActorConfig
-  private readonly client: GoogleGenAI
+  private sdkCache: GoogleSdk | null = null
 
   constructor(
     config: GoogleActorConfig,
@@ -69,9 +73,18 @@ export class GoogleActorRuntime extends AiActor {
       sharedControls,
     })
     this.config = config
-    this.client = new GoogleGenAI({
-      apiKey: this.config.apiKey,
-    })
+  }
+
+  private async getSdk(): Promise<GoogleSdk> {
+    if (!this.sdkCache) {
+      const { GoogleGenAI } = await import('@google/genai')
+      this.sdkCache = {
+        client: new GoogleGenAI({
+          apiKey: this.config.apiKey,
+        }),
+      }
+    }
+    return this.sdkCache
   }
 
   protected isRetryableError(error: ActorRequestError) {
@@ -83,7 +96,9 @@ export class GoogleActorRuntime extends AiActor {
     errorStack,
     signal,
   }: AiActorRequestArgs): Promise<ActorMove | Error> {
-    const response = await this.client.models
+    const { client } = await this.getSdk()
+
+    const response = await client.models
       .generateContent({
         model: this.config.model,
         contents: buildAiActorPrompt({ context, errorStack }),

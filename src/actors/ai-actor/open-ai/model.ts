@@ -1,5 +1,6 @@
-import OpenAI, { APIError } from 'openai'
 import { named } from '@reatom/core'
+import type OpenAIType from 'openai'
+import type { APIError as APIErrorType } from 'openai'
 import {
   IllegalMoveError,
   OpenAiHttpError,
@@ -21,9 +22,14 @@ import {
 } from '../request'
 import type { OpenAiActorConfig } from './config.schema'
 
+type OpenAiSdk = {
+  client: OpenAIType
+  APIError: typeof APIErrorType
+}
+
 export class OpenAiActorRuntime extends AiActor {
   private readonly config: OpenAiActorConfig
-  private readonly client: OpenAI
+  private sdkCache: OpenAiSdk | null = null
 
   constructor(
     config: OpenAiActorConfig,
@@ -36,11 +42,21 @@ export class OpenAiActorRuntime extends AiActor {
       sharedControls,
     })
     this.config = config
-    this.client = new OpenAI({
-      apiKey: this.config.apiKey,
-      baseURL: 'https://api.openai.com/v1',
-      dangerouslyAllowBrowser: true,
-    })
+  }
+
+  private async getSdk(): Promise<OpenAiSdk> {
+    if (!this.sdkCache) {
+      const { default: OpenAI, APIError } = await import('openai')
+      this.sdkCache = {
+        client: new OpenAI({
+          apiKey: this.config.apiKey,
+          baseURL: 'https://api.openai.com/v1',
+          dangerouslyAllowBrowser: true,
+        }),
+        APIError,
+      }
+    }
+    return this.sdkCache
   }
 
   protected isRetryableError(error: ActorRequestError) {
@@ -52,7 +68,9 @@ export class OpenAiActorRuntime extends AiActor {
     errorStack,
     signal,
   }: AiActorRequestArgs): Promise<ActorMove | Error> {
-    const response = await this.client.responses
+    const { client, APIError } = await this.getSdk()
+
+    const response = await client.responses
       .create(
         {
           model: this.config.model,

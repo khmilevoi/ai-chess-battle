@@ -627,7 +627,7 @@ export const GamePage = reatomMemo(({
                     key={`${move.moveNumber}-${move.uci}`}
                     className={[
                       styles.historyItem,
-                      move.isCurrent ? styles.historyItemActive : '',
+                      move.moveNumber === historyCursor ? styles.historyItemActive : '',
                     ].join(' ')}
                     onClick={() => {
                       model.goToMove(move.moveNumber)

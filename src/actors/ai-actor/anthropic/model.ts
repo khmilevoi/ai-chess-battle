@@ -1,6 +1,7 @@
-import Anthropic, { APIError } from '@anthropic-ai/sdk'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { named } from '@reatom/core'
+import type AnthropicType from '@anthropic-ai/sdk'
+import type { APIError as APIErrorType } from '@anthropic-ai/sdk'
+import type { zodOutputFormat as zodOutputFormatType } from '@anthropic-ai/sdk/helpers/zod'
 import {
   AnthropicHttpError,
   AnthropicResponseError,
@@ -23,9 +24,15 @@ import {
 } from '../model'
 import type { AnthropicActorConfig } from './config.schema'
 
+type AnthropicSdk = {
+  client: AnthropicType
+  APIError: typeof APIErrorType
+  zodOutputFormat: typeof zodOutputFormatType
+}
+
 export class AnthropicActorRuntime extends AiActor {
   private readonly config: AnthropicActorConfig
-  private readonly client: Anthropic
+  private sdkCache: AnthropicSdk | null = null
 
   constructor(
     config: AnthropicActorConfig,
@@ -38,11 +45,25 @@ export class AnthropicActorRuntime extends AiActor {
       sharedControls,
     })
     this.config = config
-    this.client = new Anthropic({
-      apiKey: this.config.apiKey,
-      dangerouslyAllowBrowser: true,
-      maxRetries: 2,
-    })
+  }
+
+  private async getSdk(): Promise<AnthropicSdk> {
+    if (!this.sdkCache) {
+      const [{ default: Anthropic, APIError }, { zodOutputFormat }] = await Promise.all([
+        import('@anthropic-ai/sdk'),
+        import('@anthropic-ai/sdk/helpers/zod'),
+      ])
+      this.sdkCache = {
+        client: new Anthropic({
+          apiKey: this.config.apiKey,
+          dangerouslyAllowBrowser: true,
+          maxRetries: 2,
+        }),
+        APIError,
+        zodOutputFormat,
+      }
+    }
+    return this.sdkCache
   }
 
   protected isRetryableError(error: ActorRequestError) {
@@ -54,7 +75,9 @@ export class AnthropicActorRuntime extends AiActor {
     errorStack,
     signal,
   }: AiActorRequestArgs): Promise<ActorMove | Error> {
-    const response = await this.client.messages
+    const { client, APIError, zodOutputFormat } = await this.getSdk()
+
+    const response = await client.messages
       .parse(
         {
           model: this.config.model,

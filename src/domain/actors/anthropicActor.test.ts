@@ -121,6 +121,24 @@ async function flushMicrotask() {
   await Promise.resolve()
 }
 
+/**
+ * Pre-seed the lazy sdkCache so tests can spy on `client.messages.parse`
+ * without triggering a real network call. Returns the mock Anthropic client.
+ */
+function preSeedSdk(actor: AnthropicActorRuntime, apiKey: string): Anthropic {
+  const client = new Anthropic({
+    apiKey,
+    dangerouslyAllowBrowser: true,
+    maxRetries: 2,
+  })
+  Reflect.set(actor, 'sdkCache', {
+    client,
+    APIError: Anthropic.APIError,
+    zodOutputFormat: () => ({}),
+  })
+  return client
+}
+
 describe('AnthropicActor', () => {
   const config = {
     apiKey: 'test-key',
@@ -139,7 +157,7 @@ describe('AnthropicActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as Anthropic
+    const client = preSeedSdk(actor, config.apiKey)
     vi.spyOn(client.messages, 'parse').mockRejectedValue(new Error('network down'))
 
     const result = await actor.requestMove({
@@ -150,16 +168,25 @@ describe('AnthropicActor', () => {
     expect(result).toBeInstanceOf(AnthropicTransportError)
   })
 
-  it('configures the sdk client with the explicit retry budget', () => {
+  it('configures the sdk client with the explicit retry budget', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      createAnthropicMessageResponse('{"from":"e2","to":"e4","promotion":"null"}'),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
     const actor = AnthropicActor.create(config)
 
     if (!(actor instanceof AnthropicActorRuntime)) {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as Anthropic
+    await actor.requestMove({
+      context: createActorContext(),
+      signal: new AbortController().signal,
+    })
 
-    expect(client.maxRetries).toBe(2)
+    const sdkCache = Reflect.get(actor, 'sdkCache') as { client: Anthropic } | null
+    expect(sdkCache?.client.maxRetries).toBe(2)
   })
 
   it('does not wait for confirmation by default', async () => {
@@ -247,7 +274,7 @@ describe('AnthropicActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as Anthropic
+    const client = preSeedSdk(actor, config.apiKey)
     const parseMock = vi
       .spyOn(client.messages, 'parse')
       .mockResolvedValueOnce(
@@ -321,7 +348,7 @@ describe('AnthropicActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as Anthropic
+    const client = preSeedSdk(actor, config.apiKey)
     const parseMock = vi.spyOn(client.messages, 'parse')
 
     for (let attempt = 0; attempt < AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS; attempt += 1) {
@@ -350,7 +377,7 @@ describe('AnthropicActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as Anthropic
+    const client = preSeedSdk(actor, config.apiKey)
     const parseMock = vi
       .spyOn(client.messages, 'parse')
       .mockResolvedValueOnce(
@@ -449,7 +476,7 @@ describe('AnthropicActor', () => {
     }
 
     const controller = new AbortController()
-    const client = Reflect.get(actor, 'client') as Anthropic
+    const client = preSeedSdk(actor, config.apiKey)
     const parseMock = vi
       .spyOn(client.messages, 'parse')
       .mockResolvedValue(

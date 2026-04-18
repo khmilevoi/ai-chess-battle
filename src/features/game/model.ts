@@ -81,7 +81,6 @@ type RuntimeControlsByGroupKey = Record<string, unknown>
 type HistoryMove = {
   moveNumber: number
   uci: string
-  isCurrent: boolean
 }
 
 type GameStatusTone = 'neutral' | 'warning' | 'error' | 'success'
@@ -107,16 +106,10 @@ function buildActorContext(
   engine: ChessEngineFacade,
   snapshot: BoardSnapshot,
 ): ActorContext {
-  const legalMovesBySquare: Record<Square, Array<Square>> = {}
-
-  for (const square of engine.getMovablePieces(snapshot.turn)) {
-    legalMovesBySquare[square] = engine.getLegalMoves(square)
-  }
-
   return {
     side: snapshot.turn,
     snapshot,
-    legalMovesBySquare,
+    legalMovesBySquare: engine.getAllLegalMoves(),
     moveCount: snapshot.history.length,
   }
 }
@@ -386,7 +379,6 @@ export function createGameModel({
   }, `${name}.storedGameConfigSignature`)
   const historyMoves = computed(() => {
     const currentGame = storedGame()
-    const cursor = historyCursor()
 
     if (!currentGame) {
       return [] as Array<HistoryMove>
@@ -395,7 +387,6 @@ export function createGameModel({
     return currentGame.moves.map((uci, index) => ({
       moveNumber: index + 1,
       uci,
-      isCurrent: cursor === index + 1,
     }))
   }, `${name}.historyMoves`)
   const activeActorState = computed(() => {

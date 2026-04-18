@@ -66,6 +66,13 @@
   line-height: 1;
 }
 
+@media (max-width: 480px) {
+  .primaryButton,
+  .secondaryButton {
+    min-width: 160px;
+  }
+}
+
 .primaryButton {
   background: #050505;
   color: #ffffff;

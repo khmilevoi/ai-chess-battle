@@ -34,8 +34,10 @@ type AiProviderSettingsProps = {
 }
 
 const FieldErrorList = reatomMemo(({
+  id,
   errors,
 }: {
+  id?: string
   errors: Array<string> | undefined
 }) => {
   if (!errors || errors.length === 0) {
@@ -43,7 +45,7 @@ const FieldErrorList = reatomMemo(({
   }
 
   return (
-    <ul>
+    <ul id={id} role="alert" aria-live="polite">
       {errors.map((error) => (
         <li key={error}>{error}</li>
       ))}
@@ -75,6 +77,11 @@ export const AiProviderSettings = reatomMemo(({
       ? 'Unlock vault'
       : null
 
+  const apiKeyErrorId = `${actorKey}-apiKey-error`
+  const modelErrorId = `${actorKey}-model-error`
+  const hasApiKeyError = (errors.apiKey?.length ?? 0) > 0
+  const hasModelError = (errors.model?.length ?? 0) > 0
+
   return (
     <div>
       <label>
@@ -83,6 +90,8 @@ export const AiProviderSettings = reatomMemo(({
           type="password"
           value={vaultStatus === 'unlocked' ? storedSecret : ''}
           disabled={vaultStatus !== 'unlocked'}
+          aria-invalid={hasApiKeyError || undefined}
+          aria-describedby={hasApiKeyError ? apiKeyErrorId : undefined}
           onChange={(event) => {
             const nextSecret = event.target.value
             const persistSecret =
@@ -109,7 +118,7 @@ export const AiProviderSettings = reatomMemo(({
           }
         />
       </label>
-      <FieldErrorList errors={errors.apiKey} />
+      <FieldErrorList id={apiKeyErrorId} errors={errors.apiKey} />
       <div className={styles.vaultAssist}>
         <p className={styles.vaultHint}>{vaultHint}</p>
         {vaultActionLabel ? (
@@ -127,6 +136,8 @@ export const AiProviderSettings = reatomMemo(({
         <span>Model</span>
         <select
           value={value.model}
+          aria-invalid={hasModelError || undefined}
+          aria-describedby={hasModelError ? modelErrorId : undefined}
           onChange={(event) =>
             onChange({
               ...value,
@@ -141,7 +152,7 @@ export const AiProviderSettings = reatomMemo(({
           ))}
         </select>
       </label>
-      <FieldErrorList errors={errors.model} />
+      <FieldErrorList id={modelErrorId} errors={errors.model} />
     </div>
   )
 }, 'AiProviderSettings')

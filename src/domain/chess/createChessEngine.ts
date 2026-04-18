@@ -176,6 +176,18 @@ export function createChessEngine(
         .moves({ square: chessSquare, verbose: true })
         .map((move) => move.to)
     },
+    getAllLegalMoves() {
+      const result: Record<Square, Array<Square>> = {}
+
+      for (const move of chess.moves({ verbose: true })) {
+        if (!result[move.from]) {
+          result[move.from] = []
+        }
+        result[move.from].push(move.to)
+      }
+
+      return result
+    },
     applyMove(move) {
       const result = errore.try({
         try: () =>

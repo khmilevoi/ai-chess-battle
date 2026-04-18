@@ -131,3 +131,61 @@ rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
 
 Overall average: **60-90% token reduction** on common development operations.
 <!-- /rtk-instructions -->
+
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+A local web app for playing chess matches: Human vs Human, Human vs AI, or AI vs AI. AI providers (OpenAI, Anthropic, Google) are configured per-side via a credential vault stored in localStorage. No backend — everything runs in the browser.
+
+## Commands
+
+```bash
+pnpm dev            # Start Vite dev server
+pnpm build          # tsc + vite build
+pnpm lint           # ESLint
+pnpm test           # vitest run (single pass)
+pnpm test:watch     # vitest watch
+
+# Run a single test file
+rtk vitest run src/path/to/file.test.ts
+# Run tests matching a name pattern
+rtk vitest run -t "test name pattern"
+```
+
+## Architecture
+
+**State management**: [Reatom](https://reatom.dev/) (reactive atoms). All state lives in atoms; components subscribe via `useAtom`. Use `atom()`, `action()`, `computed()`, `effect()`, `withAsync()`, `withAbort()`.
+
+**Routing**: Custom `reatomRoute()` in `src/app/routes.tsx` — path patterns with loaders and render functions, no React Router.
+
+**Actor system** (`src/actors/`): Pluggable players defined with `defineActor()`. Each actor has:
+- `ActorDescriptor` — metadata + factory
+- `ActorControlsContract` — Zod schema for persisted config, default state, UI controls
+- `InteractiveActor` (human, waits for user input) vs `AutonomousActor` (AI, auto-moves)
+
+Adding a new AI provider: implement `AutonomousActor` and register in the actor registry.
+
+**Chess domain** (`src/domain/chess/`): Thin facade over `chess.js`. All chess logic goes through `ChessEngine`; raw `chess.js` calls should not appear outside this module.
+
+**Features** (`src/features/`):
+- `match-setup` — configure actors per side, start game
+- `game` — active match board + move history
+- `games` — archive of completed games
+
+**Storage** (`src/shared/storage/`): localStorage-backed atoms. `gameSessionStorage` persists active game; `matchConfigStorage` persists match setup. Games are archived on completion.
+
+**Credential vault** (`src/app/vault/`): API keys stored encrypted in localStorage. Actors read keys via vault atoms; the vault modal is triggered reactively when a key is missing.
+
+**Error handling**: Tagged errors via `errore` library. `ActorError`, `EngineError`, and provider-specific subtypes. Match errors by tag, not instanceof.
+
+**Gate pattern**: `reatomGate` (see `src/actors/ai-actor/model.ts`) — async confirmation flow that suspends an action until the user confirms or cancels (used for "confirm before AI API call" feature).
+
+## Key Patterns
+
+- `reatomMemo` wraps React components for memoization with Reatom context
+- Zod schemas define actor config shape and validate localStorage data
+- All AI actor controls share a common base via `src/actors/ai-actor/`; provider-specific actors (`openai-actor`, `anthropic-actor`, `google-actor`) extend it
+- Test setup file: `src/test/setup.ts`

@@ -41,6 +41,12 @@
   gap: 18px;
 }
 
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .card {
   display: grid;
   gap: 14px;

@@ -60,6 +60,7 @@ export interface ChessEngineFacade {
   getBoardSnapshot(): BoardSnapshot
   getMovablePieces(side: Side): Array<Square>
   getLegalMoves(square: Square): Array<Square>
+  getAllLegalMoves(): Record<Square, Array<Square>>
   applyMove(move: ActorMove): BoardSnapshot | EngineFailure
   getGameStatus(): GameStatus
 }
