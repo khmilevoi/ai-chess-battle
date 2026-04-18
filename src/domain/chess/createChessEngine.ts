@@ -129,6 +129,25 @@ function createSnapshot(chess: Chess): BoardSnapshot {
   }
 }
 
+function applyMoveToChess(chess: Chess, move: ActorMove): Move | IllegalMoveError {
+  return errore.try({
+    try: () =>
+      chess.move(
+        {
+          from: move.from,
+          to: move.to,
+          promotion: move.promotion,
+        },
+        { strict: true },
+      ),
+    catch: (cause) =>
+      new IllegalMoveError({
+        uci: move.uci,
+        cause,
+      }),
+  })
+}
+
 export function createChessEngine(
   initialFen: string = DEFAULT_POSITION,
 ): ChessEngineFacade | EngineError {
@@ -189,25 +208,21 @@ export function createChessEngine(
       return result
     },
     applyMove(move) {
-      const result = errore.try({
-        try: () =>
-          chess.move(
-            {
-              from: move.from,
-              to: move.to,
-              promotion: move.promotion,
-            },
-            { strict: true },
-          ),
-        catch: (cause) =>
-          new IllegalMoveError({
-            uci: move.uci,
-            cause,
-          }),
-      })
+      const result = applyMoveToChess(chess, move)
 
       if (result instanceof Error) {
         return result
+      }
+
+      return createSnapshot(chess)
+    },
+    applyMoves(moves) {
+      for (const move of moves) {
+        const result = applyMoveToChess(chess, move)
+
+        if (result instanceof Error) {
+          return result
+        }
       }
 
       return createSnapshot(chess)

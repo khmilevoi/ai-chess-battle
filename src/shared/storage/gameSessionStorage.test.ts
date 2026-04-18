@@ -54,6 +54,7 @@ describe('gameSessionStorage', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('starts empty when there are no saved games', () => {
@@ -213,6 +214,113 @@ describe('gameSessionStorage', () => {
     ])
   })
 
+  it('reads summaries from cached state without replaying stored moves', async () => {
+    vi.resetModules()
+    window.localStorage.setItem(
+      GAMES_STORAGE_KEY,
+      JSON.stringify({
+        data: {
+          version: 1,
+          activeGameId: null,
+          games: [
+            {
+              id: 'cached-invalid-moves',
+              version: 1,
+              config: {
+                white: createDefaultSideConfig('human'),
+                black: createDefaultSideConfig('human'),
+              },
+              actorControls: {},
+              moves: ['e2e5'],
+              state: {
+                fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1',
+                turn: 'black',
+                status: {
+                  kind: 'active',
+                  turn: 'black',
+                },
+                moveCount: 1,
+              },
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          ],
+        },
+        version: 'games@2',
+      }),
+    )
+    const module = await import('./gameSessionStorage')
+
+    module.ensureStoredGameArchiveInitialized()
+
+    expect(peek(module.storedGameSummariesAtom)).toEqual([
+      expect.objectContaining({
+        id: 'cached-invalid-moves',
+        moveCount: 1,
+        turn: 'black',
+        statusText: 'black to move',
+        isFinished: false,
+      }),
+    ])
+  })
+
+  it('backfills cached state for legacy archive records', async () => {
+    vi.resetModules()
+    window.localStorage.setItem(
+      GAMES_STORAGE_KEY,
+      JSON.stringify({
+        data: {
+          version: 1,
+          activeGameId: null,
+          games: [
+            {
+              id: 'legacy-record',
+              version: 1,
+              config: {
+                white: createDefaultSideConfig('human'),
+                black: createDefaultSideConfig('human'),
+              },
+              actorControls: {},
+              moves: ['e2e4'],
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          ],
+        },
+        version: 'games@1',
+      }),
+    )
+    const module = await import('./gameSessionStorage')
+
+    module.ensureStoredGameArchiveInitialized()
+
+    expect(peek(module.storedGameSummariesAtom)).toEqual([
+      expect.objectContaining({
+        id: 'legacy-record',
+        moveCount: 1,
+        turn: 'black',
+      }),
+    ])
+
+    const rawSnapshot = window.localStorage.getItem(GAMES_STORAGE_KEY)
+    expect(rawSnapshot).not.toBeNull()
+
+    const persisted = JSON.parse(rawSnapshot ?? '{}') as {
+      data?: {
+        games?: Array<{
+          state?: unknown
+        }>
+      }
+    }
+
+    expect(persisted.data?.games?.[0]?.state).toEqual(
+      expect.objectContaining({
+        moveCount: 1,
+        turn: 'black',
+      }),
+    )
+  })
+
   it('hydrates legacy saved games without actor controls', () => {
     const gameId = crypto.randomUUID()
     const saved = saveStoredGameRecord({
@@ -231,6 +339,7 @@ describe('gameSessionStorage', () => {
   })
 
   it('does not persist provider api keys in saved game archives', () => {
+    vi.useFakeTimers()
     createRequiredStoredGame({
       config: {
         white: {
@@ -244,6 +353,7 @@ describe('gameSessionStorage', () => {
         black: createDefaultSideConfig('human'),
       },
     })
+    vi.advanceTimersByTime(200)
 
     expect(window.localStorage.getItem(GAMES_STORAGE_KEY)).not.toContain(
       'sk-archive-secret',

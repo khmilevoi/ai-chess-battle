@@ -62,6 +62,7 @@ export interface ChessEngineFacade {
   getLegalMoves(square: Square): Array<Square>
   getAllLegalMoves(): Record<Square, Array<Square>>
   applyMove(move: ActorMove): BoardSnapshot | EngineFailure
+  applyMoves(moves: Array<ActorMove>): BoardSnapshot | EngineFailure
   getGameStatus(): GameStatus
 }
 

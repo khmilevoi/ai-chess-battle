@@ -4,11 +4,12 @@ import { createChessEngine } from '@/domain/chess/createChessEngine'
 import {
   isTerminalStatus,
   parseUciMove,
+  type ActorMove,
   type BoardSnapshot,
   type ChessEngineFacade,
   type UciMove,
 } from '@/domain/chess/types'
-import { StorageError } from '../errors'
+import { IllegalMoveError, StorageError } from '../errors'
 import { vaultSecretsAtom } from './credentialVault'
 import {
   normalizeStoredMatchConfigSnapshotValue,
@@ -26,12 +27,20 @@ let archiveInitialized = false
 
 export type StoredGameActorControls = Record<string, unknown>
 
+type StoredGameStateSnapshot = {
+  fen: BoardSnapshot['fen']
+  turn: BoardSnapshot['turn']
+  status: BoardSnapshot['status']
+  moveCount: number
+}
+
 type StoredGameRecordSnapshot = {
   id: string
   version: typeof STORAGE_DATA_VERSION
   config: StoredMatchConfig
   actorControls: StoredGameActorControls
   moves: Array<UciMove>
+  state: StoredGameStateSnapshot
   createdAt: number
   updatedAt: number
 }
@@ -48,6 +57,7 @@ export type StoredGameRecord = {
   config: MatchConfig
   actorControls: StoredGameActorControls
   moves: Array<UciMove>
+  state: StoredGameStateSnapshot
   createdAt: number
   updatedAt: number
 }
@@ -79,9 +89,7 @@ function createEmptyArchive(): StoredGameArchiveSnapshot {
   }
 }
 
-function formatStatus(snapshot: BoardSnapshot): string {
-  const status = snapshot.status
-
+function formatStatus(status: BoardSnapshot['status']): string {
   if (status.kind === 'active') {
     return `${status.turn} to move`
   }
@@ -109,6 +117,146 @@ function normalizeStoredGameActorControls(value: unknown): StoredGameActorContro
   const record = value as Record<string, unknown>
 
   return { ...record }
+}
+
+function isStoredGameSide(value: unknown): value is BoardSnapshot['turn'] {
+  return value === 'white' || value === 'black'
+}
+
+function normalizeStoredGameStatusValue(
+  value: unknown,
+): BoardSnapshot['status'] | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null
+  }
+
+  const record = value as Record<string, unknown>
+
+  if (record.kind === 'active' && isStoredGameSide(record.turn)) {
+    return {
+      kind: 'active',
+      turn: record.turn,
+    }
+  }
+
+  if (record.kind === 'check' && isStoredGameSide(record.turn)) {
+    return {
+      kind: 'check',
+      turn: record.turn,
+    }
+  }
+
+  if (record.kind === 'checkmate' && isStoredGameSide(record.winner)) {
+    return {
+      kind: 'checkmate',
+      winner: record.winner,
+    }
+  }
+
+  if (record.kind === 'stalemate') {
+    return {
+      kind: 'stalemate',
+    }
+  }
+
+  if (record.kind === 'draw' && typeof record.reason === 'string') {
+    return {
+      kind: 'draw',
+      reason: record.reason,
+    }
+  }
+
+  return null
+}
+
+function normalizeStoredGameStateValue(
+  value: unknown,
+): StoredGameStateSnapshot | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null
+  }
+
+  const record = value as Record<string, unknown>
+  const status = normalizeStoredGameStatusValue(record.status)
+
+  if (
+    typeof record.fen !== 'string' ||
+    record.fen.length === 0 ||
+    !isStoredGameSide(record.turn) ||
+    status === null ||
+    typeof record.moveCount !== 'number' ||
+    !Number.isInteger(record.moveCount) ||
+    record.moveCount < 0
+  ) {
+    return null
+  }
+
+  return {
+    fen: record.fen,
+    turn: record.turn,
+    status,
+    moveCount: record.moveCount,
+  }
+}
+
+function createStoredGameStateSnapshot(
+  snapshot: BoardSnapshot,
+): StoredGameStateSnapshot {
+  return {
+    fen: snapshot.fen,
+    turn: snapshot.turn,
+    status: snapshot.status,
+    moveCount: snapshot.history.length,
+  }
+}
+
+function createStoredMoveReplayError(error: Error): StorageError {
+  if (error instanceof IllegalMoveError) {
+    return new StorageError({
+      message: `Failed to replay stored move "${error.uci}".`,
+      cause: error,
+    })
+  }
+
+  return new StorageError({
+    message: 'Failed to replay stored moves.',
+    cause: error,
+  })
+}
+
+function createStoredGameStateSnapshotFromMoves(
+  moves: Array<UciMove>,
+): StoredGameStateSnapshot | StorageError {
+  const engine = createChessEngine()
+
+  if (engine instanceof Error) {
+    return new StorageError({
+      message: 'Failed to initialize the saved game session.',
+      cause: engine,
+    })
+  }
+
+  const parsedMoves: Array<ActorMove> = []
+
+  for (const uci of moves) {
+    const move = parseUciMove(uci)
+
+    if (move === null) {
+      return new StorageError({
+        message: `Stored move "${uci}" is invalid.`,
+      })
+    }
+
+    parsedMoves.push(move)
+  }
+
+  const snapshot = engine.applyMoves(parsedMoves)
+
+  if (snapshot instanceof Error) {
+    return createStoredMoveReplayError(snapshot)
+  }
+
+  return createStoredGameStateSnapshot(snapshot)
 }
 
 function normalizeStoredGameRecordSnapshotValue(
@@ -141,6 +289,16 @@ function normalizeStoredGameRecordSnapshotValue(
     return null
   }
 
+  const moves = record.moves as Array<UciMove>
+  const state =
+    normalizeStoredGameStateValue(record.state) ??
+    createStoredGameStateSnapshotFromMoves(moves)
+
+  if (state instanceof Error) {
+    console.warn(state)
+    return null
+  }
+
   if (
     typeof record.createdAt !== 'number' ||
     !Number.isFinite(record.createdAt) ||
@@ -155,7 +313,8 @@ function normalizeStoredGameRecordSnapshotValue(
     version: STORAGE_DATA_VERSION,
     config,
     actorControls: normalizeStoredGameActorControls(record.actorControls),
-    moves: record.moves as Array<UciMove>,
+    moves,
+    state,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   }
@@ -289,12 +448,20 @@ function readLegacyStoredGameSessionSnapshotFromStorage(): LegacyStoredGameSessi
 function createMigratedArchive(
   legacySession: LegacyStoredGameSession,
 ): StoredGameArchiveSnapshot {
+  const state = createStoredGameStateSnapshotFromMoves(legacySession.moves)
+
+  if (state instanceof Error) {
+    console.warn(state)
+    return createEmptyArchive()
+  }
+
   const migratedRecord: StoredGameRecordSnapshot = {
     id: crypto.randomUUID(),
     version: STORAGE_DATA_VERSION,
     config: legacySession.config,
     actorControls: {},
     moves: legacySession.moves,
+    state,
     createdAt: legacySession.updatedAt,
     updatedAt: legacySession.updatedAt,
   }
@@ -386,6 +553,7 @@ export function ensureStoredGameArchiveInitialized(): void {
 
   if (archiveSnapshot !== currentArchive) {
     storedGameArchiveAtom.set(archiveSnapshot)
+    persistArchiveNow(archiveSnapshot)
   }
 
   if (legacySession !== null) {
@@ -568,12 +736,16 @@ export function createStoredGameRecord({
   config: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
-}): StoredGameRecord {
+}): StoredGameRecord | StorageError {
   const snapshot = createStoredGameRecordSnapshot({
     config,
     actorControls,
     moves,
   })
+
+  if (snapshot instanceof Error) {
+    return snapshot
+  }
 
   return resolveStoredGameRecord(snapshot, peek(vaultSecretsAtom))
 }
@@ -586,8 +758,13 @@ function createStoredGameRecordSnapshot({
   config: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
-}): StoredGameRecordSnapshot {
+}): StoredGameRecordSnapshot | StorageError {
   const now = Date.now()
+  const state = createStoredGameStateSnapshotFromMoves(moves)
+
+  if (state instanceof Error) {
+    return state
+  }
 
   return {
     id: crypto.randomUUID(),
@@ -595,6 +772,7 @@ function createStoredGameRecordSnapshot({
     config: redactMatchConfig(config),
     actorControls,
     moves,
+    state,
     createdAt: now,
     updatedAt: now,
   }
@@ -613,6 +791,11 @@ export function createStoredGame({
 }): StoredGameRecord | StorageError {
   ensureStoredGameArchiveInitialized()
   const record = createStoredGameRecord({ config, actorControls, moves })
+
+  if (record instanceof Error) {
+    return record
+  }
+
   const persisted = saveStoredGameRecord(record, { activate: makeActive })
 
   if (persisted !== null) {
@@ -628,12 +811,17 @@ export function saveStoredGameRecord(
   record: StoredGameRecord,
   options?: {
     activate?: boolean
+    snapshot?: BoardSnapshot
   },
 ): StoredGameRecord | null {
   ensureStoredGameArchiveInitialized()
   const normalized = normalizeStoredGameRecordSnapshotValue({
     ...record,
     config: redactMatchConfig(record.config),
+    state:
+      options?.snapshot === undefined
+        ? record.state
+        : createStoredGameStateSnapshot(options.snapshot),
   })
 
   if (normalized === null) {
@@ -668,12 +856,14 @@ export function updateStoredGameRecord({
   config,
   actorControls,
   moves,
+  snapshot,
   updatedAt = Date.now(),
 }: {
   gameId: string
   config?: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
+  snapshot?: BoardSnapshot
   updatedAt?: number
 }): StoredGameRecord | null {
   ensureStoredGameArchiveInitialized()
@@ -683,11 +873,17 @@ export function updateStoredGameRecord({
     return null
   }
 
-  const nextRecord: StoredGameRecordSnapshot = {
+  const nextRecord = {
     ...currentRecord,
     config: config === undefined ? currentRecord.config : redactMatchConfig(config),
     actorControls: actorControls ?? currentRecord.actorControls,
     moves: moves ?? currentRecord.moves,
+    state:
+      snapshot === undefined
+        ? moves === undefined
+          ? currentRecord.state
+          : undefined
+        : createStoredGameStateSnapshot(snapshot),
     updatedAt,
   }
 
@@ -755,7 +951,7 @@ export function replayStoredGameRecord(
     })
   }
 
-  let snapshot = engine.getBoardSnapshot()
+  const moves: Array<ActorMove> = []
 
   for (const uci of record.moves.slice(0, moveCount)) {
     const move = parseUciMove(uci)
@@ -766,16 +962,13 @@ export function replayStoredGameRecord(
       })
     }
 
-    const nextSnapshot = engine.applyMove(move)
+    moves.push(move)
+  }
 
-    if (nextSnapshot instanceof Error) {
-      return new StorageError({
-        message: `Failed to replay stored move "${uci}".`,
-        cause: nextSnapshot,
-      })
-    }
+  const snapshot = engine.applyMoves(moves)
 
-    snapshot = nextSnapshot
+  if (snapshot instanceof Error) {
+    return createStoredMoveReplayError(snapshot)
   }
 
   return { engine, snapshot }
@@ -784,20 +977,14 @@ export function replayStoredGameRecord(
 export function summarizeStoredGameRecord(
   record: StoredGameRecord,
 ): StoredGameSummary | StorageError {
-  const replayed = replayStoredGameRecord(record)
-
-  if (replayed instanceof Error) {
-    return replayed
-  }
-
   return {
     id: record.id,
     config: record.config,
-    moveCount: replayed.snapshot.history.length,
-    turn: replayed.snapshot.turn,
-    fen: replayed.snapshot.fen,
-    statusText: formatStatus(replayed.snapshot),
-    isFinished: isTerminalStatus(replayed.snapshot.status),
+    moveCount: record.state.moveCount,
+    turn: record.state.turn,
+    fen: record.state.fen,
+    statusText: formatStatus(record.state.status),
+    isFinished: isTerminalStatus(record.state.status),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   }

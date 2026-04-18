@@ -714,11 +714,16 @@ export function createGameModel({
       return createMissingGameError(gameId)
     }
 
-    const persisted = saveStoredGameRecord({
-      ...currentGame,
-      moves: nextSnapshot.history,
-      updatedAt: Date.now(),
-    })
+    const persisted = saveStoredGameRecord(
+      {
+        ...currentGame,
+        moves: nextSnapshot.history,
+        updatedAt: Date.now(),
+      },
+      {
+        snapshot: nextSnapshot,
+      },
+    )
 
     if (persisted === null) {
       return new StorageError({
