@@ -6,3 +6,7 @@
   height: 100%;
   filter: var(--shadow-piece-filter);
 }
+
+.sprite[data-side='black'] {
+  filter: var(--shadow-piece-filter-black);
+}

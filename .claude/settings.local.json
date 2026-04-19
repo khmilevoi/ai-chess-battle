@@ -6,7 +6,10 @@
       "Bash(rtk tsc *)",
       "Bash(rtk git *)",
       "Bash(rtk pnpm *)",
-      "Bash(rtk grep *)"
+      "Bash(rtk grep *)",
+      "Bash(vercel --version)",
+      "Bash(vercel --prod)",
+      "Bash(vercel login *)"
     ]
   }
 }
