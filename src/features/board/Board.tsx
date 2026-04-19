@@ -64,6 +64,8 @@ export const Board = reatomMemo(({
   const lastMoveSquares = new Set(
     snapshot.lastMove ? [snapshot.lastMove.from, snapshot.lastMove.to] : [],
   )
+  const legalTargetsSet = new Set(legalTargets)
+  const movableSquaresSet = new Set(movableSquares)
 
   // Roving tabindex: track which square owns the tab stop
   const defaultFocused = movableSquares[0] ?? 'a1'
@@ -114,9 +116,9 @@ export const Board = reatomMemo(({
               const square = `${file}${rank}`
               const piece = pieces.get(square)
               const isSelected = selectedSquare === square
-              const isTarget = legalTargets.includes(square)
+              const isTarget = legalTargetsSet.has(square)
               const isCapture = isTarget && !!piece
-              const isMovable = movableSquares.includes(square)
+              const isMovable = movableSquaresSet.has(square)
               const isLastMove = lastMoveSquares.has(square)
               const idx = squareIndex(square)
               const rowIdx = Math.floor(idx / 8) + 1

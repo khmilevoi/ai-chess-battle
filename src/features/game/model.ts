@@ -383,23 +383,27 @@ export function createGameModel({
       !isTerminalStatus(currentSnapshot.status)
     )
   }, `${name}.canContinueFromCurrentMove`)
-  const storedGameConfigSignature = computed(() => {
+  const storedGameConfigSignature = atom<string | null>(null, `${name}.storedGameConfigSignature`)
+  effect(() => {
     const currentGame = storedGame()
-
-    return currentGame === null ? null : JSON.stringify(currentGame.config)
-  }, `${name}.storedGameConfigSignature`)
-  const historyMoves = computed(() => {
-    const currentGame = storedGame()
-
-    if (!currentGame) {
-      return [] as Array<HistoryMove>
+    const nextSig = currentGame === null ? null : JSON.stringify(currentGame.config)
+    if (nextSig !== peek(storedGameConfigSignature)) {
+      storedGameConfigSignature.set(nextSig)
     }
-
-    return currentGame.moves.map((uci, index) => ({
-      moveNumber: index + 1,
-      uci,
-    }))
-  }, `${name}.historyMoves`)
+  }, `${name}.syncStoredGameConfigSignature`)
+  const historyMoves = atom([] as Array<HistoryMove>, `${name}.historyMoves`)
+  effect(() => {
+    const currentGame = storedGame()
+    const nextMoves = currentGame?.moves ?? []
+    const prev = peek(historyMoves)
+    if (
+      prev.length === nextMoves.length &&
+      (nextMoves.length === 0 || prev[prev.length - 1]?.uci === nextMoves[nextMoves.length - 1])
+    ) {
+      return
+    }
+    historyMoves.set(nextMoves.map((uci, index) => ({ moveNumber: index + 1, uci })))
+  }, `${name}.syncHistoryMoves`)
   const activeActorState = computed(() => {
     const currentSnapshot = snapshot()
     const currentActors = actors()
