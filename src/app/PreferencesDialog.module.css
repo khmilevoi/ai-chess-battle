@@ -1,0 +1,61 @@
+.sections {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width-default) solid var(--border-default);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.fieldLabel {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.select {
+  padding: 8px 10px;
+  border: var(--border-width-default) solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+}
+
+.select:focus-visible {
+  outline: var(--focus-ring-width) var(--focus-ring-style) var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.checkField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.checkField input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  border: var(--border-width-default) solid var(--border-default);
+  accent-color: var(--bg-inverse);
+  cursor: pointer;
+  flex-shrink: 0;
+}

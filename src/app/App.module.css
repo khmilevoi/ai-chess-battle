@@ -36,13 +36,23 @@
 
 .headerColumn {
   display: grid;
-  grid-template-columns: auto minmax(200px, 1fr) auto;
+  grid-template-columns: auto minmax(200px, 1fr) auto auto;
   gap: var(--space-3);
   align-items: stretch;
   min-width: 0;
   transition:
     gap 180ms ease,
     grid-template-columns 180ms ease;
+}
+
+.prefsButton {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 6px;
+  box-shadow: none;
+  font-size: 1.1rem;
+  align-self: center;
 }
 
 .brand {
@@ -263,7 +273,7 @@
   }
 
   .headerColumn {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto auto;
   }
 
   .brand {
@@ -277,7 +287,7 @@
   }
 
   .gameMasthead .headerColumn {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto auto;
   }
 }
 
@@ -292,7 +302,7 @@
   }
 
   .headerColumn {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto auto;
   }
 
   .vaultCard {

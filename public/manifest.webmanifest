@@ -1,0 +1,17 @@
+{
+  "name": "AI Chess Battle",
+  "short_name": "Chess Battle",
+  "description": "Play chess against AI — Human vs AI, AI vs AI, or Human vs Human.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f4f1",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
