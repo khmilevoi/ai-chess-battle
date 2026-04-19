@@ -17,7 +17,7 @@ const NEXT_LABELS: Record<ThemePreference, string> = {
   dark: 'Switch to system theme',
 }
 
-function ThemeIcon({ preference }: { preference: ThemePreference }) {
+function renderThemeIcon(preference: ThemePreference) {
   if (preference === 'light') return <Sun size={16} aria-hidden />
   if (preference === 'dark') return <Moon size={16} aria-hidden />
   return <Monitor size={16} aria-hidden />
@@ -40,7 +40,7 @@ export const ThemeToggle = reatomMemo(() => {
       aria-label={NEXT_LABELS[preference]}
       title={`${LABELS[preference]} — ${NEXT_LABELS[preference]}`}
     >
-      <ThemeIcon preference={preference} />
+      {renderThemeIcon(preference)}
     </button>
   )
 }, 'ThemeToggle')

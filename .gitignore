@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 .env
+.vercel
 .worktrees/
 
 # Editor directories and files

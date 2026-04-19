@@ -57,6 +57,34 @@ pnpm build
 pnpm preview
 ```
 
+### Публикация на Vercel
+
+Репозиторий подготовлен для публикации как статическое `Vite`-приложение.
+При импорте проекта в Vercel используйте настройки:
+
+- `Framework Preset`: `Vite`;
+- `Install Command`: `pnpm install --frozen-lockfile`;
+- `Build Command`: `pnpm build`;
+- `Output Directory`: `dist`;
+- `Node.js Version`: совместимая с `^20.19.0 || >=22.12.0`.
+
+Файл `vercel.json` фиксирует эти настройки и добавляет rewrites для клиентских
+маршрутов `/games`, `/game` и `/game/:gameId`, чтобы прямое открытие этих URL
+возвращало SPA-entrypoint.
+
+Переменные окружения для Vercel не требуются: API-ключи AI-провайдеров вводятся
+в интерфейсе и хранятся локально в браузере пользователя. Не добавляйте ключи
+`OpenAI`, `Anthropic` или `Google` в Vercel Environment Variables для текущей
+архитектуры приложения.
+
+Если используется Vercel CLI:
+
+```bash
+vercel link
+vercel deploy
+vercel deploy --prod
+```
+
 ## Как начать матч
 
 1. Откройте страницу `Setup`.

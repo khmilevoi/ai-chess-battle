@@ -8,7 +8,7 @@ import {
 } from './credentialVaultDialogState'
 import styles from './App.module.css'
 
-function VaultIcon({ status }: { status: 'unconfigured' | 'locked' | 'unlocked' }) {
+function renderVaultIcon(status: 'unconfigured' | 'locked' | 'unlocked') {
   if (status === 'unlocked') return <LockOpen size={16} aria-hidden />
   if (status === 'locked') return <Lock size={16} aria-hidden />
   return <KeyRound size={16} aria-hidden />
@@ -47,7 +47,7 @@ export const CredentialVaultControl = reatomMemo(() => {
           openCredentialVaultDialog()
         }}
       >
-        <VaultIcon status={vaultStatus} />
+        {renderVaultIcon(vaultStatus)}
       </Button>
       {notice ? <span className={styles.vaultNotice}>{notice}</span> : null}
     </div>
