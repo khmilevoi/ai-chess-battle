@@ -4,8 +4,8 @@
   margin: var(--space-2) 0 var(--space-4);
   padding: var(--space-3);
   border: var(--brutalist-border);
-  background: var(--color-paper-soft);
-  color: var(--color-ink);
+  background: var(--bg-surface-alt);
+  color: var(--text-primary);
 }
 
 .vaultHint {

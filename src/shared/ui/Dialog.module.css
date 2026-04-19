@@ -1,17 +1,17 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--z-dialog);
   display: grid;
   place-items: center;
   padding: var(--space-6);
   background:
     repeating-linear-gradient(
       45deg,
-      rgb(5 5 5 / 0.72),
-      rgb(5 5 5 / 0.72) 12px,
-      rgb(5 5 5 / 0.62) 12px,
-      rgb(5 5 5 / 0.62) 24px
+      var(--bg-overlay),
+      var(--bg-overlay) 12px,
+      var(--bg-overlay-stripe) 12px,
+      var(--bg-overlay-stripe) 24px
     );
 }
 
@@ -20,8 +20,8 @@
   max-height: min(100vh - 48px, 760px);
   overflow: auto;
   border: var(--brutalist-border-strong);
-  background: var(--color-paper);
-  box-shadow: var(--brutalist-shadow-strong);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-strong);
 }
 
 .header {

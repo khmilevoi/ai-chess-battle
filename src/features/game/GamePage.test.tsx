@@ -1,5 +1,4 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_GOOGLE_MODEL } from '@/actors/ai-actor/google'
 import {
@@ -133,7 +132,6 @@ describe('GamePage', () => {
   })
 
   it('renders read-only match info for both sides and hides API keys', async () => {
-    const user = userEvent.setup()
     const model = await createStartedModel({
       config: {
         white: createOpenAiSide(),
@@ -143,23 +141,15 @@ describe('GamePage', () => {
 
     render(<GamePage model={model} />)
 
-    const toggle = screen.getByRole('button', { name: /Match info/i })
+    const matchInfoContent = screen
+      .getByRole('heading', { name: 'Saved setup' })
+      .closest('aside')
 
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('GPT-5.4')).not.toBeInTheDocument()
+    if (!matchInfoContent) {
+      throw new Error('Expected saved setup to be rendered in an aside panel.')
+    }
 
-    await user.click(toggle)
-
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-
-    const contentId = toggle.getAttribute('aria-controls')
-    const matchInfoContent =
-      contentId === null ? null : document.getElementById(contentId)
-
-    expect(matchInfoContent).not.toBeNull()
-
-    const panel = within(matchInfoContent as HTMLElement)
-
+    const panel = within(matchInfoContent)
     expect(panel.getByText('White')).toBeInTheDocument()
     expect(panel.getByText('Black')).toBeInTheDocument()
     expect(panel.getByText('GPT-5.4')).toBeInTheDocument()
@@ -171,7 +161,6 @@ describe('GamePage', () => {
   })
 
   it('falls back to raw saved model values when they are outside the curated options', async () => {
-    const user = userEvent.setup()
     const model = await createStartedModel({
       config: {
         white: {
@@ -188,19 +177,16 @@ describe('GamePage', () => {
 
     render(<GamePage model={model} />)
 
-    const toggle = screen.getByRole('button', { name: /Match info/i })
+    const matchInfoContent = screen
+      .getByRole('heading', { name: 'Saved setup' })
+      .closest('aside')
 
-    expect(screen.queryByText('custom-openai-model')).not.toBeInTheDocument()
+    if (!matchInfoContent) {
+      throw new Error('Expected saved setup to be rendered in an aside panel.')
+    }
 
-    await user.click(toggle)
-
-    const contentId = toggle.getAttribute('aria-controls')
-    const matchInfoContent =
-      contentId === null ? null : document.getElementById(contentId)
-
-    expect(matchInfoContent).not.toBeNull()
     expect(
-      within(matchInfoContent as HTMLElement).getByText('custom-openai-model'),
+      within(matchInfoContent).getByText('custom-openai-model'),
     ).toBeInTheDocument()
   })
 

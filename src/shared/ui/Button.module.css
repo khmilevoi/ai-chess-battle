@@ -7,10 +7,10 @@
   padding: 10px 16px;
   border: var(--brutalist-border);
   border-radius: 0;
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--bg-surface);
+  color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: 0.95rem;
+  font-size: var(--font-size-base);
   font-weight: 700;
   line-height: 1.1;
   text-align: center;
@@ -18,7 +18,7 @@
   letter-spacing: 0;
   cursor: pointer;
   user-select: none;
-  box-shadow: var(--brutalist-shadow);
+  box-shadow: var(--shadow-default);
   transition:
     transform var(--motion-fast),
     box-shadow var(--motion-fast),
@@ -28,7 +28,7 @@
 
 .button:hover:not(:disabled) {
   transform: translate(2px, 2px);
-  box-shadow: var(--brutalist-shadow-hover);
+  box-shadow: var(--shadow-hover);
 }
 
 .button:active:not(:disabled) {
@@ -43,14 +43,14 @@
 
 .button:disabled {
   cursor: not-allowed;
-  background: var(--color-paper-muted);
-  color: var(--color-gray-dark);
+  background: var(--bg-surface-strong);
+  color: var(--text-muted);
   box-shadow: none;
   transform: none;
 }
 
 .defaultButton:hover:not(:disabled) {
-  background: var(--color-paper-muted);
+  background: var(--bg-surface-strong);
 }
 
 .primaryButton,
@@ -72,27 +72,27 @@
 }
 
 .primaryButton {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--bg-inverse);
+  color: var(--text-inverse);
 }
 
 .primaryButton:hover:not(:disabled) {
-  background: var(--color-gray-dark);
+  background: var(--text-muted);
 }
 
 .primaryButton:active:not(:disabled) {
-  background: var(--color-ink);
+  background: var(--bg-inverse);
 }
 
 .secondaryButton {
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .secondaryButton:hover:not(:disabled) {
-  background: var(--color-paper-muted);
+  background: var(--bg-surface-strong);
 }
 
 .secondaryButton:active:not(:disabled) {
-  background: var(--color-paper);
+  background: var(--bg-surface);
 }

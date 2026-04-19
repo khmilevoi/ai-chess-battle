@@ -902,6 +902,25 @@ export function updateStoredGameRecord({
   return resolveStoredGameRecord(normalized, peek(vaultSecretsAtom))
 }
 
+export function deleteStoredGameRecord(gameId: string): StoredGameRecord | null {
+  ensureStoredGameArchiveInitialized()
+  const record = readStoredGameRecord(gameId)
+
+  mapArchive((current) => {
+    const nextGames = current.games.filter((game) => game.id !== gameId)
+    return {
+      ...current,
+      games: nextGames,
+      activeGameId: current.activeGameId === gameId ? null : current.activeGameId,
+    }
+  })
+
+  storedGameRecordAtomCache.delete(gameId)
+  storedGameSummaryAtomCache.delete(gameId)
+
+  return record
+}
+
 export function clearStoredGameArchive(): void {
   storedGameRecordAtomCache.clear()
   storedGameSummaryAtomCache.clear()

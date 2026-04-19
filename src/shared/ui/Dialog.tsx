@@ -3,24 +3,15 @@ import { createPortal } from 'react-dom'
 import { Button } from './Button'
 import styles from './Dialog.module.css'
 
+const FOCUSABLE_SELECTOR =
+  'input:not([disabled]), button:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+
 type DialogProps = {
   open: boolean
   title: string
   onClose: () => void
   children: ReactNode
   dismissible?: boolean
-}
-
-function focusFirstFocusable(container: HTMLElement | null) {
-  if (container === null) {
-    return
-  }
-
-  const target = container.querySelector<HTMLElement>(
-    'input, button, select, textarea, [href], [tabindex]:not([tabindex="-1"])',
-  )
-
-  target?.focus()
 }
 
 export function Dialog({
@@ -32,13 +23,27 @@ export function Dialog({
 }: DialogProps) {
   const titleId = useId()
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const previousFocusRef = useRef<Element | null>(null)
 
   useEffect(() => {
     if (!open) {
       return
     }
 
-    focusFirstFocusable(panelRef.current)
+    previousFocusRef.current = document.activeElement
+
+    const panel = panelRef.current
+    if (panel) {
+      const first = panel.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+      first?.focus()
+    }
+
+    return () => {
+      const prev = previousFocusRef.current
+      if (prev instanceof HTMLElement) {
+        prev.focus()
+      }
+    }
   }, [open])
 
   useEffect(() => {
@@ -50,6 +55,30 @@ export function Dialog({
       if (event.key === 'Escape' && dismissible) {
         event.preventDefault()
         onClose()
+        return
+      }
+
+      if (event.key === 'Tab') {
+        const panel = panelRef.current
+        if (!panel) return
+
+        const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+        if (focusable.length === 0) return
+
+        const first = focusable[0]!
+        const last = focusable[focusable.length - 1]!
+
+        if (event.shiftKey) {
+          if (document.activeElement === first) {
+            event.preventDefault()
+            last.focus()
+          }
+        } else {
+          if (document.activeElement === last) {
+            event.preventDefault()
+            first.focus()
+          }
+        }
       }
     }
 

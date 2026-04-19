@@ -1,0 +1,30 @@
+.toggle {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 6px;
+  border: var(--brutalist-border);
+  border-radius: 0;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    transform var(--motion-fast),
+    background-color var(--motion-fast);
+}
+
+.toggle:hover {
+  background: var(--bg-surface-strong);
+}
+
+.toggle:active {
+  transform: translate(2px, 2px);
+}
+
+.toggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}

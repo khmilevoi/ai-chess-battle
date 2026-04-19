@@ -48,13 +48,13 @@
 }
 
 .stateBadgeManual {
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .stateBadgeAuto {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--bg-inverse);
+  color: var(--text-inverse);
 }
 
 .toggleCard {
@@ -65,8 +65,8 @@
   cursor: pointer;
   padding: var(--space-2);
   border: 2px solid currentColor;
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .checkbox {
@@ -77,7 +77,7 @@
   height: 22px;
   margin: 0;
   border: 2px solid currentColor;
-  background: var(--color-paper);
+  background: var(--bg-surface);
   transition:
     background-color var(--motion-fast),
     box-shadow var(--motion-fast);
@@ -93,13 +93,13 @@
 }
 
 .checkbox:checked {
-  background: var(--color-ink);
-  box-shadow: 3px 3px 0 var(--color-paper);
+  background: var(--bg-inverse);
+  box-shadow: 3px 3px 0 var(--bg-surface);
 }
 
 .checkbox:checked::after {
-  border-left-color: var(--color-paper);
-  border-bottom-color: var(--color-paper);
+  border-left-color: var(--text-inverse);
+  border-bottom-color: var(--text-inverse);
 }
 
 .checkbox:focus-visible {

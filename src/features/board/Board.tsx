@@ -3,6 +3,7 @@ import styles from './Board.module.css'
 import type { BoardSnapshot, PieceSnapshot, Square } from '@/domain/chess/types'
 import { PieceIcon } from '@/shared/ui/PieceIcon'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
+import { boardThemeAtom } from './boardTheme'
 
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 const ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
@@ -95,8 +96,10 @@ export const Board = reatomMemo(({
     [rovingSquare, interactive, onSquareClick],
   )
 
+  const boardTheme = boardThemeAtom()
+
   return (
-    <div className={styles.boardWrap}>
+    <div className={styles.boardWrap} data-board-theme={boardTheme}>
       <div className={styles.frame}>
         <div
           role="grid"

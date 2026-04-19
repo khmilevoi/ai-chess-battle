@@ -104,7 +104,13 @@ export const AiProviderSettings = reatomMemo(({
                 return
               }
 
-              console.warn(result)
+              import('@/shared/ui/Toast').then(({ pushToast }) => {
+                pushToast({
+                  tone: 'error',
+                  title: 'API key not saved',
+                  description: 'Failed to store the API key in the vault.',
+                })
+              })
             })
           }}
           autoComplete="off"

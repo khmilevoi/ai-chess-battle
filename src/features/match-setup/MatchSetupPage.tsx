@@ -1,10 +1,18 @@
-import { isActorKey } from '@/actors/registry'
+import { isActorKey, type ActorKey } from '@/actors/registry'
 import { presentError } from '@/shared/errors'
-import { PrimaryButton, SecondaryButton } from '@/shared/ui/Button'
+import { Button, PrimaryButton, SecondaryButton } from '@/shared/ui/Button'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
 import { ActorSettingsFields } from './actorSettings'
 import type { MatchSetupModel } from './model'
 import styles from './MatchSetupPage.module.css'
+
+const PRESETS: { label: string; white: ActorKey; black: ActorKey }[] = [
+  { label: 'You vs OpenAI', white: 'human', black: 'openai' },
+  { label: 'You vs Anthropic', white: 'human', black: 'anthropic' },
+  { label: 'You vs Google', white: 'human', black: 'google' },
+  { label: 'OpenAI vs Anthropic', white: 'openai', black: 'anthropic' },
+  { label: 'Human vs Human', white: 'human', black: 'human' },
+]
 
 const ActorCard = reatomMemo(({
   side,
@@ -120,8 +128,31 @@ export const MatchSetupPage = reatomMemo(({
         </section>
       ) : null}
 
+      <div className={styles.presetBar} role="group" aria-label="Quick presets">
+        <span className={styles.presetBarLabel}>Presets</span>
+        {PRESETS.map((preset) => (
+          <Button
+            key={`${preset.white}-${preset.black}`}
+            className={styles.presetButton}
+            onClick={() => model.setPreset(preset.white, preset.black)}
+          >
+            {preset.label}
+          </Button>
+        ))}
+      </div>
+
       <div className={styles.grid}>
         <ActorCard side="white" model={model} />
+        <div className={styles.swapColumn}>
+          <Button
+            className={styles.swapButton}
+            onClick={() => model.swapSides()}
+            title="Swap sides"
+            aria-label="Swap white and black sides"
+          >
+            ⇄
+          </Button>
+        </div>
         <ActorCard side="black" model={model} />
       </div>
 

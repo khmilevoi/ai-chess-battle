@@ -92,6 +92,8 @@ export type GameStatusView = {
   busy: boolean
   actorLabel: string | null
   canRetry: boolean
+  canAbort: boolean
+  elapsedSeconds: number | null
 }
 
 type CreateGameModelOptions = {
@@ -136,27 +138,23 @@ function formatStatus(snapshot: BoardSnapshot): string {
   return `Draw: ${status.reason}`
 }
 
-function getPromotion(
+function isPromotionMove(
   snapshot: BoardSnapshot,
   from: Square,
   to: Square,
-): ActorMove['promotion'] {
+): boolean {
   const piece = snapshot.pieces.find((candidate) => candidate.square === from)
 
   if (!piece || piece.type !== 'pawn') {
-    return undefined
+    return false
   }
 
   const targetRank = to.at(-1)
 
-  if (
+  return (
     (piece.side === 'white' && targetRank === '8') ||
     (piece.side === 'black' && targetRank === '1')
-  ) {
-    return 'q'
-  }
-
-  return undefined
+  )
 }
 
 function createConfiguredActor(
@@ -243,6 +241,12 @@ export function createGameModel({
   const actors = atom<SideActors | null>(null, `${name}.actors`)
   const historyCursor = atom(0, `${name}.historyCursor`)
   const selectedSquare = atom<Square | null>(null, `${name}.selectedSquare`)
+
+  type PendingPromotion = { from: Square; to: Square }
+  const pendingPromotion = atom<PendingPromotion | null>(null, `${name}.pendingPromotion`)
+
+  const turnStartedAtAtom = atom<number | null>(null, `${name}.turnStartedAt`)
+  const turnElapsedSecondsAtom = atom<number>(0, `${name}.turnElapsedSeconds`)
   const runtimeError = atom<Error | null>(null, `${name}.runtimeError`)
   const startupBlockedConfigSignature = atom<string | null>(
     null,
@@ -323,12 +327,13 @@ export function createGameModel({
             )
 
             if (!normalizedStateResult.success) {
-              console.warn(
-                new StorageError({
-                  message: `Actor controls "${controlGroupKey}" failed validation.`,
-                  cause: normalizedStateResult.error,
-                }),
-              )
+              import('@/shared/ui/Toast').then(({ pushToast }) => {
+                pushToast({
+                  tone: 'warning',
+                  title: 'Settings save skipped',
+                  description: `Actor controls failed validation and were not persisted.`,
+                })
+              })
               return
             }
 
@@ -338,7 +343,13 @@ export function createGameModel({
             )
 
             if (persisted instanceof Error) {
-              console.warn(persisted)
+              import('@/shared/ui/Toast').then(({ pushToast }) => {
+                pushToast({
+                  tone: 'warning',
+                  title: 'Settings not saved',
+                  description: 'Could not persist actor controls to storage.',
+                })
+              })
             }
           },
         })
@@ -536,6 +547,7 @@ export function createGameModel({
     const currentTurnActivity = turnActivity()
     const cursor = historyCursor()
     const latest = latestMoveCount()
+    const elapsed = turnElapsedSecondsAtom()
 
     if (!currentSnapshot || currentPhase === 'pending') {
       return {
@@ -545,6 +557,8 @@ export function createGameModel({
         busy: true,
         actorLabel: currentSnapshot ? currentActorLabel : null,
         canRetry: false,
+        canAbort: false,
+        elapsedSeconds: null,
       } satisfies GameStatusView
     }
 
@@ -559,6 +573,8 @@ export function createGameModel({
         busy: false,
         actorLabel: currentActorLabel,
         canRetry: false,
+        canAbort: false,
+        elapsedSeconds: null,
       } satisfies GameStatusView
     }
 
@@ -570,6 +586,8 @@ export function createGameModel({
         busy: false,
         actorLabel: currentActorLabel,
         canRetry: canContinueFromCurrentMove(),
+        canAbort: false,
+        elapsedSeconds: null,
       } satisfies GameStatusView
     }
 
@@ -581,6 +599,8 @@ export function createGameModel({
         busy: false,
         actorLabel: currentActorLabel,
         canRetry: false,
+        canAbort: false,
+        elapsedSeconds: null,
       } satisfies GameStatusView
     }
 
@@ -592,6 +612,8 @@ export function createGameModel({
         busy: true,
         actorLabel: currentActorLabel,
         canRetry: false,
+        canAbort: false,
+        elapsedSeconds: null,
       } satisfies GameStatusView
     }
 
@@ -604,6 +626,8 @@ export function createGameModel({
           busy: true,
           actorLabel: currentActorLabel,
           canRetry: false,
+          canAbort: false,
+          elapsedSeconds: null,
         } satisfies GameStatusView
       }
 
@@ -614,6 +638,8 @@ export function createGameModel({
         busy: true,
         actorLabel: currentActorLabel,
         canRetry: false,
+        canAbort: true,
+        elapsedSeconds: elapsed > 0 ? elapsed : null,
       } satisfies GameStatusView
     }
 
@@ -625,6 +651,8 @@ export function createGameModel({
         busy: false,
         actorLabel: currentActorLabel,
         canRetry: false,
+        canAbort: false,
+        elapsedSeconds: null,
       } satisfies GameStatusView
     }
 
@@ -635,6 +663,8 @@ export function createGameModel({
       busy: false,
       actorLabel: currentActorLabel,
       canRetry: false,
+      canAbort: false,
+      elapsedSeconds: null,
     } satisfies GameStatusView
   }, `${name}.statusView`)
 
@@ -1031,6 +1061,29 @@ export function createGameModel({
     void startMatch()
   }, `${name}.retryStartupOnCredentialChange`)
 
+  effect(() => {
+    const activity = turnActivity()
+    const isAiTurn = activity === 'awaitingActor' && peek(activeHumanActor) === null
+
+    if (!isAiTurn) {
+      turnStartedAtAtom.set(null)
+      turnElapsedSecondsAtom.set(0)
+      return
+    }
+
+    const now = Date.now()
+    turnStartedAtAtom.set(now)
+    turnElapsedSecondsAtom.set(0)
+
+    const intervalId = setInterval(() => {
+      const started = peek(turnStartedAtAtom)
+      if (started === null) return
+      turnElapsedSecondsAtom.set(Math.floor((Date.now() - started) / 1000))
+    }, 1000)
+
+    return () => clearInterval(intervalId)
+  }, `${name}.turnElapsedTicker`)
+
   const retryTurn = action(() => {
     if (phase() !== 'actorError' || !canContinueFromCurrentMove()) {
       return null
@@ -1042,6 +1095,20 @@ export function createGameModel({
     void runMatchLoop()
     return null
   }, `${name}.retryTurn`)
+
+  const abortCurrentTurn = action(() => {
+    const currentSnapshot = snapshot()
+    if (turnActivity() !== 'awaitingActor') {
+      return null
+    }
+
+    runMatchLoop.abort(
+      new TurnCancelledError({
+        side: currentSnapshot?.turn ?? 'white',
+      }),
+    )
+    return null
+  }, `${name}.abortCurrentTurn`)
 
   const goToMove = action((nextCursor: number) => {
     stopLiveLoop()
@@ -1099,12 +1166,17 @@ export function createGameModel({
       : []
 
     if (currentSelectedSquare && legalMoves.includes(square)) {
-      const promotion = getPromotion(currentSnapshot, currentSelectedSquare, square)
+      if (isPromotionMove(currentSnapshot, currentSelectedSquare, square)) {
+        pendingPromotion.set({ from: currentSelectedSquare, to: square })
+        selectedSquare.set(null)
+        return null
+      }
+
       const move: ActorMove = {
         from: currentSelectedSquare,
         to: square,
-        promotion,
-        uci: toUciMove(currentSelectedSquare, square, promotion),
+        promotion: undefined,
+        uci: toUciMove(currentSelectedSquare, square, undefined),
       }
 
       const result = humanActor.submitMove(move)
@@ -1129,6 +1201,39 @@ export function createGameModel({
     selectedSquare.set(null)
     return null
   }, `${name}.clickSquare`)
+
+  const resolvePromotion = action((piece: import('@/domain/chess/types').PromotionPiece) => {
+    const pending = peek(pendingPromotion)
+    const humanActor = peek(activeHumanActor)
+
+    if (!pending || !humanActor) {
+      return null
+    }
+
+    pendingPromotion.set(null)
+
+    const move: ActorMove = {
+      from: pending.from,
+      to: pending.to,
+      promotion: piece,
+      uci: toUciMove(pending.from, pending.to, piece),
+    }
+
+    const result = humanActor.submitMove(move)
+
+    if (result instanceof Error) {
+      runtimeError.set(result)
+      phase.setActorError()
+      return result
+    }
+
+    return move
+  }, `${name}.resolvePromotion`)
+
+  const cancelPromotion = action(() => {
+    pendingPromotion.set(null)
+    return null
+  }, `${name}.cancelPromotion`)
 
   const leaveMatch = action(() => {
     resetState()
@@ -1162,7 +1267,13 @@ export function createGameModel({
       const startResult = await wrap(startMatch())
 
       if (startResult instanceof Error) {
-        console.warn(startResult)
+        import('@/shared/ui/Toast').then(({ pushToast }) => {
+          pushToast({
+            tone: 'error',
+            title: 'Match start failed',
+            description: startResult.message,
+          })
+        })
       }
 
       return cleanupOnce
@@ -1195,10 +1306,14 @@ export function createGameModel({
     boardInteractive,
     startMatch,
     retryTurn,
+    abortCurrentTurn,
     goToMove,
     goToPreviousMove,
     goToNextMove,
     clickSquare,
+    pendingPromotion,
+    resolvePromotion,
+    cancelPromotion,
     leaveMatch,
     openGames,
     dispose,

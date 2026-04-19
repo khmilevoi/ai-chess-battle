@@ -2,8 +2,13 @@ import { urlAtom } from '@reatom/core'
 import { Children, Fragment, type ReactNode } from 'react'
 import { activeStoredGameSummaryAtom } from '@/shared/storage/gameSessionStorage'
 import { Button } from '@/shared/ui/Button'
+import { SkipLink } from '@/shared/ui/SkipLink'
+import { ThemeToggle } from '@/shared/ui/ThemeToggle'
+import { ToastViewport } from '@/shared/ui/Toast'
 import { CredentialVaultControl } from './CredentialVaultControl'
 import { CredentialVaultDialog } from './CredentialVaultDialog'
+import { SrAnnouncer } from './SrAnnouncer'
+import { ThemeEffect } from './ThemeEffect'
 import styles from './App.module.css'
 
 export type RootShellProps = {
@@ -40,6 +45,7 @@ export function RootShellView({
           <h1 className={styles.name}>AI Chess Battle</h1>
         </div>
         <CredentialVaultControl />
+        <ThemeToggle />
       </div>
       <nav className={styles.nav} aria-label="Primary">
         <Button
@@ -92,10 +98,16 @@ export function RootShellView({
 
   return (
     <div className={[styles.shell, isGamePage ? styles.gameShell : ''].join(' ')}>
+      <SkipLink />
       <div className={[styles.content, isGamePage ? styles.gameContent : ''].join(' ')}>
+        <ThemeEffect />
+        <SrAnnouncer />
         <header className={mastheadClassName}>{mastheadContent}</header>
-        {routeContent}
+        <main id="main-content">
+          {routeContent}
+        </main>
         <CredentialVaultDialog />
+        <ToastViewport />
       </div>
     </div>
   )

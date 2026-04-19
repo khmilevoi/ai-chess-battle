@@ -8,6 +8,7 @@ import type { ActorMatchInfoProps } from '@/actors/types'
 import { Button } from '@/shared/ui/Button'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
 import { Board } from '../board/Board'
+import { PromotionPicker } from '../board/PromotionPicker'
 import type { GameModel } from './model'
 import styles from './GamePage.module.css'
 
@@ -82,6 +83,13 @@ function renderActorControlsPanel({
 
   return (
     <aside className={[styles.panel, styles.actorPanel].join(' ')}>
+      <div className={styles.panelHeader}>
+        <div className={styles.panelHeading}>
+          <p className={styles.panelEyebrow}>Actor controls</p>
+          <h2 className={styles.panelTitle}>Actors</h2>
+        </div>
+      </div>
+
       {controlsNotice ? (
         <div className={styles.inlineNotice}>
           <p className={styles.inlineNoticeLabel}>Controls unavailable</p>
@@ -203,6 +211,7 @@ export const GamePage = reatomMemo(({
   const movableSquares = model.movableSquares()
   const statusView = model.statusView()
   const boardInteractive = model.boardInteractive()
+  const pendingPromotion = model.pendingPromotion()
   const actorPanels = model.actorPanels()
   const matchInfoEntries = model.matchInfoEntries()
   const hasActorControls = actorPanels.some((actorPanel) => actorPanel.hasControls)
@@ -283,16 +292,33 @@ export const GamePage = reatomMemo(({
               ) : null}
             </div>
 
-            {phase === 'actorError' && statusView.canRetry ? (
+            {statusView.elapsedSeconds !== null ? (
+              <div className={styles.elapsedTimer} aria-live="off">
+                <span className={styles.elapsedLabel}>Thinking</span>
+                <span className={styles.elapsedValue}>{statusView.elapsedSeconds}s</span>
+              </div>
+            ) : null}
+
+            {(phase === 'actorError' && statusView.canRetry) || statusView.canAbort ? (
               <div className={styles.statusActions}>
-                <Button
-                  className={styles.statusActionButton}
-                  onClick={async () => {
-                    await model.retryTurn()
-                  }}
-                >
-                  Retry turn
-                </Button>
+                {phase === 'actorError' && statusView.canRetry ? (
+                  <Button
+                    className={styles.statusActionButton}
+                    onClick={async () => {
+                      await model.retryTurn()
+                    }}
+                  >
+                    Retry turn
+                  </Button>
+                ) : null}
+                {statusView.canAbort ? (
+                  <Button
+                    className={styles.statusActionButton}
+                    onClick={() => model.abortCurrentTurn()}
+                  >
+                    Abort turn
+                  </Button>
+                ) : null}
               </div>
             ) : null}
 
@@ -331,6 +357,13 @@ export const GamePage = reatomMemo(({
               }}
             />
           </section>
+          {pendingPromotion ? (
+            <PromotionPicker
+              side={snapshot.turn}
+              onResolve={(piece) => model.resolvePromotion(piece)}
+              onCancel={() => model.cancelPromotion()}
+            />
+          ) : null}
         </main>
 
         <aside className={[styles.rail, styles.rightRail].join(' ')}>

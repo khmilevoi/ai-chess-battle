@@ -13,7 +13,7 @@
 .masthead {
   position: sticky;
   top: var(--space-4);
-  z-index: 20;
+  z-index: var(--z-sticky);
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto;
   gap: var(--space-4);
@@ -21,8 +21,8 @@
   margin-bottom: var(--space-6);
   padding: var(--space-3);
   border: var(--brutalist-border-strong);
-  background: var(--color-paper);
-  box-shadow: var(--brutalist-shadow);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-default);
   transition:
     margin-bottom 180ms ease,
     max-block-size 180ms ease,
@@ -36,7 +36,7 @@
 
 .headerColumn {
   display: grid;
-  grid-template-columns: auto minmax(260px, 420px);
+  grid-template-columns: auto minmax(200px, 1fr) auto;
   gap: var(--space-3);
   align-items: stretch;
   min-width: 0;
@@ -74,7 +74,7 @@
   min-width: 0;
   padding: var(--space-1) var(--space-2);
   border: var(--brutalist-border);
-  background: var(--color-paper-soft);
+  background: var(--bg-surface-alt);
   transition:
     padding 180ms ease,
     gap 180ms ease,
@@ -88,7 +88,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -146,7 +146,7 @@
   margin: 0;
   padding: var(--space-2) var(--space-3);
   border: var(--brutalist-border);
-  background: var(--color-paper);
+  background: var(--bg-surface);
   font-family: var(--font-mono);
   font-size: 0.8rem;
   font-weight: 700;
@@ -169,12 +169,12 @@
 }
 
 .navButtonActive {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--bg-inverse);
+  color: var(--text-inverse);
 }
 
 .navButtonActive:hover:not(:disabled) {
-  background: var(--color-ink);
+  background: var(--bg-inverse);
 }
 
 .routePlaceholder {
@@ -182,8 +182,8 @@
   display: grid;
   place-items: center;
   border: var(--brutalist-border-strong);
-  background: var(--color-paper);
-  box-shadow: var(--brutalist-shadow);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-default);
   font-family: var(--font-mono);
   font-weight: 700;
   text-transform: uppercase;
@@ -208,11 +208,11 @@
   align-items: center;
   margin-bottom: var(--space-3);
   padding: var(--space-2);
-  box-shadow: 4px 4px 0 var(--color-ink);
+  box-shadow: var(--shadow-panel);
 }
 
 .gameMasthead .headerColumn {
-  grid-template-columns: auto minmax(180px, 300px);
+  grid-template-columns: auto minmax(140px, 1fr) auto;
   gap: var(--space-2);
   align-items: center;
 }
@@ -263,7 +263,7 @@
   }
 
   .headerColumn {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr auto auto;
   }
 
   .brand {
@@ -277,7 +277,7 @@
   }
 
   .gameMasthead .headerColumn {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr auto auto;
   }
 }
 
@@ -291,8 +291,16 @@
     padding: var(--space-2);
   }
 
+  .headerColumn {
+    grid-template-columns: 1fr auto auto;
+  }
+
   .vaultCard {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto auto;
+  }
+
+  .vaultStatus {
+    display: none;
   }
 
   .vaultActions {

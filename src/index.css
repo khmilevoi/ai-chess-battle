@@ -1,4 +1,5 @@
 :root {
+  /* --- Raw palette --- */
   --color-black: #000000;
   --color-ink: #050505;
   --color-white: #ffffff;
@@ -11,12 +12,24 @@
   --color-warning: #f1d85b;
   --color-error: #f05a47;
   --color-success: #5fc37a;
+
+  /* --- Typography --- */
   --font-display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua',
     'URW Palladio L', serif;
   --font-body: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', 'Cascadia Code', 'SFMono-Regular', Consolas,
     monospace;
 
+  /* --- Type scale --- */
+  --font-size-xs: 0.72rem;
+  --font-size-sm: 0.82rem;
+  --font-size-base: 0.95rem;
+  --font-size-lg: 1.15rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+  --font-size-display: 3.5rem;
+
+  /* --- Spacing --- */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -26,21 +39,88 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  --brutalist-shadow: 6px 6px 0 var(--color-ink);
-  --brutalist-shadow-strong: 10px 10px 0 var(--color-ink);
-  --brutalist-shadow-hover: 3px 3px 0 var(--color-ink);
-  --brutalist-border: 2px solid var(--color-ink);
-  --brutalist-border-strong: 4px solid var(--color-ink);
-  --focus-ring: 3px dashed var(--color-ink);
+  /* --- Brutalist primitives (kept for back-compat) --- */
+  --brutalist-shadow: 6px 6px 0 var(--border-default);
+  --brutalist-shadow-strong: 10px 10px 0 var(--border-default);
+  --brutalist-shadow-hover: 3px 3px 0 var(--border-default);
+  --brutalist-border: 2px solid var(--border-default);
+  --brutalist-border-strong: 4px solid var(--border-default);
+  --focus-ring: 3px dashed var(--border-default);
   --motion-fast: 80ms ease-out;
 
-  color: var(--color-ink);
-  background-color: var(--color-paper-soft);
+  /* --- Semantic surface tokens --- */
+  --bg-canvas: var(--color-paper-soft);
+  --bg-surface: var(--color-paper);
+  --bg-surface-alt: var(--color-paper-soft);
+  --bg-surface-strong: var(--color-paper-muted);
+  --bg-inverse: var(--color-ink);
+  --bg-overlay: rgb(5 5 5 / 0.72);
+  --bg-overlay-stripe: rgb(5 5 5 / 0.62);
+  --bg-canvas-grid: var(--color-paper-muted);
+  --bg-inverse-muted: var(--color-gray-dark);
+
+  /* --- Semantic text tokens --- */
+  --text-primary: var(--color-ink);
+  --text-inverse: var(--color-paper);
+  --text-muted: var(--color-gray-dark);
+  --text-on-accent: var(--color-paper);
+  --text-inverse-muted: var(--color-paper-muted);
+
+  /* --- Semantic border tokens --- */
+  --border-default: var(--color-ink);
+  --border-strong: var(--color-ink);
+  --border-muted: var(--color-gray-light);
+
+  /* --- Feedback tokens --- */
+  --feedback-warning-bg: var(--color-warning);
+  --feedback-warning-ink: var(--color-ink);
+  --feedback-error-bg: var(--color-error);
+  --feedback-error-ink: var(--color-ink);
+  --feedback-success-bg: var(--color-success);
+  --feedback-success-ink: var(--color-ink);
+  --feedback-info-bg: var(--color-paper-muted);
+  --feedback-info-ink: var(--color-ink);
+
+  /* --- Shadow tokens --- */
+  --shadow-default: 6px 6px 0 var(--border-default);
+  --shadow-hover: 3px 3px 0 var(--border-default);
+  --shadow-strong: 10px 10px 0 var(--border-default);
+  --shadow-panel: 4px 4px 0 var(--border-default);
+  --shadow-inset: inset 0 0 0 2px var(--border-default);
+  --shadow-piece-filter: drop-shadow(1px 1px 0 rgb(0 0 0 / 0.38));
+
+  /* --- Focus tokens --- */
+  --focus-ring-color: var(--border-default);
+  --focus-ring-style: 3px dashed var(--border-default);
+
+  /* --- Z-index scale --- */
+  --z-content: 1;
+  --z-sticky: 20;
+  --z-overlay: 900;
+  --z-dialog: 1000;
+  --z-toast: 1100;
+  --z-tooltip: 1200;
+
+  /* --- Board theme tokens (default: paper) --- */
+  --board-square-light: var(--color-paper);
+  --board-square-dark: var(--color-paper-muted);
+  --board-frame-bg: var(--color-paper);
+  --board-selected-ring: var(--color-error);
+  --board-target-dot: var(--color-success);
+  --board-movable-ring: var(--border-default);
+  --board-last-move: var(--color-warning);
+
+  /* --- AI turn progress --- */
+  --ai-expected-duration: 8s;
+
+  color: var(--text-primary);
+  background-color: var(--bg-canvas);
   background-image:
-    linear-gradient(var(--color-paper-muted) 1px, transparent 1px),
-    linear-gradient(90deg, var(--color-paper-muted) 1px, transparent 1px);
+    linear-gradient(var(--bg-canvas-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-canvas-grid) 1px, transparent 1px);
   background-size: 24px 24px;
 
+  color-scheme: light;
   font-family: var(--font-body);
   line-height: 1.4;
   font-weight: 400;
@@ -49,6 +129,71 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Dark mode overrides --- */
+:root[data-theme='dark'] {
+  --color-paper: #1a1a1a;
+  --color-paper-soft: #111111;
+  --color-paper-muted: #252525;
+  --color-ink: #f0ede6;
+  --color-gray-light: #3a3a3a;
+  --color-gray-dark: #aaa9a3;
+
+  --bg-canvas: #111111;
+  --bg-surface: #1a1a1a;
+  --bg-surface-alt: #111111;
+  --bg-surface-strong: #252525;
+  --bg-inverse: #f0ede6;
+  --bg-canvas-grid: #252525;
+  --bg-inverse-muted: #3a3a3a;
+
+  --text-primary: #f0ede6;
+  --text-inverse: #111111;
+  --text-muted: #aaa9a3;
+  --text-on-accent: #111111;
+  --text-inverse-muted: #252525;
+
+  --border-default: #f0ede6;
+  --border-strong: #f0ede6;
+  --border-muted: #3a3a3a;
+
+  --board-square-light: #2e2e2e;
+  --board-square-dark: #1e1e1e;
+  --board-frame-bg: #1a1a1a;
+
+  color-scheme: dark;
+  background-image:
+    linear-gradient(var(--bg-canvas-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-canvas-grid) 1px, transparent 1px);
+}
+
+/* --- Board theme variants (applied via data-board-theme on .boardWrap) --- */
+[data-board-theme='graphite'] {
+  --board-square-light: #5a5a5a;
+  --board-square-dark: #3a3a3a;
+  --board-frame-bg: #2a2a2a;
+  --board-selected-ring: #f0c040;
+  --board-target-dot: #90e070;
+  --board-last-move: #a0c0f0;
+}
+
+[data-board-theme='crimson'] {
+  --board-square-light: #f5d8c8;
+  --board-square-dark: #c0604a;
+  --board-frame-bg: #8a2010;
+  --board-selected-ring: #f0f020;
+  --board-target-dot: #60e080;
+  --board-last-move: #f0a820;
+}
+
+[data-board-theme='slate'] {
+  --board-square-light: #b0b8c8;
+  --board-square-dark: #607080;
+  --board-frame-bg: #405060;
+  --board-selected-ring: #f8d030;
+  --board-target-dot: #80e090;
+  --board-last-move: #c8e0f8;
 }
 
 *,
@@ -82,8 +227,8 @@ textarea {
   min-height: 44px;
   border: var(--brutalist-border);
   border-radius: 0;
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 input,
@@ -98,16 +243,16 @@ select {
 input:disabled,
 select:disabled,
 textarea:disabled {
-  background: var(--color-paper-muted);
-  color: var(--color-gray-dark);
+  background: var(--bg-surface-strong);
+  color: var(--text-muted);
   cursor: not-allowed;
 }
 
 input[aria-invalid='true'],
 select[aria-invalid='true'],
 textarea[aria-invalid='true'] {
-  border-color: var(--color-error);
-  box-shadow: inset 0 0 0 2px var(--color-error);
+  border-color: var(--feedback-error-bg);
+  box-shadow: inset 0 0 0 2px var(--feedback-error-bg);
 }
 
 button:focus-visible,
@@ -123,8 +268,8 @@ a {
 }
 
 ::selection {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--text-primary);
+  color: var(--bg-surface);
 }
 
 @media (prefers-reduced-motion: reduce) {

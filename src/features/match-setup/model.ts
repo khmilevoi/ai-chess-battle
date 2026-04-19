@@ -219,6 +219,22 @@ export function createMatchSetupModel({
     return summary.id
   }, `${name}.resumeActiveMatch`)
 
+  const swapSides = action(() => {
+    const white = peek(whiteSideConfigState)
+    const black = peek(blackSideConfigState)
+    whiteSideConfigState.set(black)
+    blackSideConfigState.set(white)
+    return null
+  }, `${name}.swapSides`)
+
+  const setPreset = action((whiteActorKey: ActorKey, blackActorKey: ActorKey) => {
+    const newWhite = hydrateSharedActorConfig(createDefaultSideConfig(whiteActorKey))
+    const newBlack = hydrateSharedActorConfig(createDefaultSideConfig(blackActorKey))
+    whiteSideConfigState.set(newWhite)
+    blackSideConfigState.set(newBlack)
+    return null
+  }, `${name}.setPreset`)
+
   const openGames = action(() => {
     goToGames()
     return null
@@ -241,6 +257,8 @@ export function createMatchSetupModel({
     startMatch,
     resumeActiveMatch,
     openGames,
+    swapSides,
+    setPreset,
   }
 }
 

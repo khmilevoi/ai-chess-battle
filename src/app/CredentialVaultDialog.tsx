@@ -192,8 +192,8 @@ export const CredentialVaultDialog = reatomMemo(() => {
 
                 resetVault()
                 clearForm()
-                setMessage(null)
-                setCredentialVaultNotice('Credential vault reset.')
+                setMessage('Credential vault reset.')
+                setCredentialVaultNotice(null)
               }}
             >
               Reset vault

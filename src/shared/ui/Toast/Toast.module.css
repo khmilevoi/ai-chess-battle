@@ -1,0 +1,114 @@
+.toast {
+  display: flex;
+  align-items: start;
+  gap: var(--space-2);
+  min-width: 280px;
+  max-width: 420px;
+  padding: var(--space-3);
+  border: var(--brutalist-border);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-default);
+  animation: slide-in 120ms ease-out;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.body {
+  display: grid;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--space-1);
+  padding: 4px 8px;
+  border: 2px solid var(--border-default);
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color var(--motion-fast);
+}
+
+.actionButton:hover {
+  background: var(--bg-surface-strong);
+}
+
+.actionButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.closeButton {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid var(--border-default);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--motion-fast);
+}
+
+.closeButton:hover {
+  background: var(--bg-surface-strong);
+}
+
+.closeButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Tone variants */
+.neutral {
+  border-left: 6px solid var(--border-default);
+}
+
+.success {
+  border-left: 6px solid var(--feedback-success-bg);
+}
+
+.warning {
+  border-left: 6px solid var(--feedback-warning-bg);
+}
+
+.error {
+  border-left: 6px solid var(--feedback-error-bg);
+}
