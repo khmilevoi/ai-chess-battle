@@ -1,22 +1,31 @@
 import { Button } from '@/shared/ui/Button'
 import { vaultStatusAtom } from '@/shared/storage/credentialVault'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
-import {
-  credentialVaultNoticeAtom,
-  openCredentialVaultDialog,
-} from './credentialVaultDialogState'
+import { openCredentialVaultDialog } from './credentialVaultDialogState'
 import styles from './App.module.css'
+
+function KeyIcon() {
+  return (
+    <svg
+      className={styles.vaultIcon}
+      viewBox="0 0 50 50"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M32,33.44A15.47,15.47,0,1,0,16.56,18a15.69,15.69,0,0,0,.73,4.72L3.12,36.87a2.08,2.08,0,0,0-.62,1.49v7A2.1,2.1,0,0,0,4.61,47.5h7a2.1,2.1,0,0,0,2.11-2.11V41.88h3.52a2.12,2.12,0,0,0,2.11-2.11V36.25h3.51a2.08,2.08,0,0,0,1.49-.62l2.93-2.92A15.69,15.69,0,0,0,32,33.44Zm3.52-22.5A3.52,3.52,0,1,1,32,14.45,3.51,3.51,0,0,1,35.55,10.94Z" />
+    </svg>
+  )
+}
 
 export const CredentialVaultControl = reatomMemo(() => {
   const vaultStatus = vaultStatusAtom()
-  const message = credentialVaultNoticeAtom()
 
   const statusLabel =
     vaultStatus === 'unconfigured'
-      ? 'No vault configured'
+      ? 'Setup needed'
       : vaultStatus === 'locked'
-      ? 'Vault locked'
-      : 'Vault unlocked'
+      ? 'Locked'
+      : 'Ready'
   const actionLabel =
     vaultStatus === 'unconfigured'
       ? 'Set up vault'
@@ -26,22 +35,19 @@ export const CredentialVaultControl = reatomMemo(() => {
 
   return (
     <section className={styles.vaultCard} aria-label="Credential vault">
-      <div className={styles.vaultHeader}>
-        <div>
-          <p className={styles.vaultEyebrow}>Credential vault</p>
-          <h2 className={styles.vaultTitle}>{statusLabel}</h2>
-        </div>
-      </div>
+      <p className={styles.vaultStatus}>{statusLabel}</p>
       <div className={styles.vaultActions}>
         <Button
+          className={styles.vaultButton}
+          aria-label={actionLabel}
+          title={actionLabel}
           onClick={() => {
             openCredentialVaultDialog()
           }}
         >
-          {actionLabel}
+          <KeyIcon />
         </Button>
       </div>
-      {message ? <p className={styles.vaultMessage}>{message}</p> : null}
     </section>
   )
 }, 'CredentialVaultControl')

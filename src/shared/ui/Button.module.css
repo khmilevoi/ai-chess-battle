@@ -5,54 +5,52 @@
   gap: 8px;
   min-height: 44px;
   padding: 10px 16px;
-  border: 1px solid #050505;
+  border: var(--brutalist-border);
   border-radius: 0;
-  background: #ffffff;
-  color: #050505;
+  background: var(--color-paper);
+  color: var(--color-ink);
   font-family: var(--font-body);
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.1;
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0;
   cursor: pointer;
   user-select: none;
+  box-shadow: var(--brutalist-shadow);
   transition:
-    transform 140ms ease,
-    box-shadow 140ms ease,
-    background-color 140ms ease,
-    color 140ms ease,
-    border-color 140ms ease,
-    opacity 140ms ease;
+    transform var(--motion-fast),
+    box-shadow var(--motion-fast),
+    background-color var(--motion-fast),
+    color var(--motion-fast);
 }
 
 .button:hover:not(:disabled) {
-  transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0 #050505;
+  transform: translate(2px, 2px);
+  box-shadow: var(--brutalist-shadow-hover);
 }
 
 .button:active:not(:disabled) {
-  transform: translate(0, 0);
+  transform: translate(6px, 6px);
   box-shadow: none;
 }
 
 .button:focus-visible {
-  outline: 2px solid #050505;
-  outline-offset: 2px;
+  outline: var(--focus-ring);
+  outline-offset: 4px;
 }
 
 .button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
-  transform: none;
+  background: var(--color-paper-muted);
+  color: var(--color-gray-dark);
   box-shadow: none;
+  transform: none;
 }
 
 .defaultButton:hover:not(:disabled) {
-  background: #f1f1f1;
-}
-
-.defaultButton:active:not(:disabled) {
-  background: #e3e3e3;
+  background: var(--color-paper-muted);
 }
 
 .primaryButton,
@@ -61,8 +59,8 @@
   min-height: 52px;
   padding: 12px 18px;
   font-family: var(--font-display);
-  font-size: 1.08rem;
-  font-weight: 400;
+  font-size: 1.2rem;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -74,27 +72,27 @@
 }
 
 .primaryButton {
-  background: #050505;
-  color: #ffffff;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .primaryButton:hover:not(:disabled) {
-  background: #171717;
+  background: var(--color-gray-dark);
 }
 
 .primaryButton:active:not(:disabled) {
-  background: #000000;
+  background: var(--color-ink);
 }
 
 .secondaryButton {
-  background: #ffffff;
-  color: #050505;
+  background: var(--color-paper);
+  color: var(--color-ink);
 }
 
 .secondaryButton:hover:not(:disabled) {
-  background: #f0f0f0;
+  background: var(--color-paper-muted);
 }
 
 .secondaryButton:active:not(:disabled) {
-  background: #dddddd;
+  background: var(--color-paper);
 }

@@ -1,6 +1,5 @@
 import * as errore from 'errore'
 import { effect, peek, reatomRoute, urlAtom } from '@reatom/core'
-import { Children, Fragment, type ReactNode } from 'react'
 import { MatchSetupPage } from '@/features/match-setup/MatchSetupPage'
 import { createMatchSetupModel } from '@/features/match-setup/model'
 import { GamesPage } from '@/features/games/GamesPage'
@@ -19,86 +18,23 @@ import {
   readStoredGameSummary,
   setActiveGameId,
 } from '@/shared/storage/gameSessionStorage'
-import { Button } from '@/shared/ui/Button'
-import { CredentialVaultControl } from './CredentialVaultControl'
-import { CredentialVaultDialog } from './CredentialVaultDialog'
-import styles from './App.module.css'
-
-function renderOutletChildren(outlet: () => ReactNode) {
-  return Children.map(outlet(), (child, index) => (
-    <Fragment key={`route-outlet-${index}`}>{child}</Fragment>
-  ))
-}
+import { RootShell } from './RootShell'
 
 export const rootRoute = reatomRoute({
   render({ outlet }) {
-    const content = renderOutletChildren(outlet)
-    const pathname = urlAtom().pathname
-    const activeGameSummary = activeStoredGameSummaryAtom()
-
     return (
-      <div className={styles.shell}>
-        <div className={styles.content}>
-          <header className={styles.masthead}>
-            <div className={styles.headerColumn}>
-              <div className={styles.brand}>
-                <h1 className={styles.name}>AI Chess Battle</h1>
-              </div>
-              <CredentialVaultControl />
-            </div>
-            <nav className={styles.nav} aria-label="Primary">
-              <Button
-                className={[
-                  styles.navButton,
-                  pathname === '/' ? styles.navButtonActive : '',
-                ].join(' ')}
-                aria-current={pathname === '/' ? 'page' : undefined}
-                onClick={() => {
-                  setupRoute.go(undefined, true)
-                }}
-              >
-                Setup
-              </Button>
-              <Button
-                className={[
-                  styles.navButton,
-                  pathname === '/games' ? styles.navButtonActive : '',
-                ].join(' ')}
-                aria-current={pathname === '/games' ? 'page' : undefined}
-                onClick={() => {
-                  gamesRoute.go(undefined, true)
-                }}
-              >
-                Games
-              </Button>
-              {activeGameSummary ? (
-                <Button
-                  className={[
-                    styles.navButton,
-                    pathname === `/game/${activeGameSummary.id}`
-                      ? styles.navButtonActive
-                      : '',
-                  ].join(' ')}
-                  aria-current={
-                    pathname === `/game/${activeGameSummary.id}` ? 'page' : undefined
-                  }
-                  onClick={() => {
-                    gameRoute.go({ gameId: activeGameSummary.id }, true)
-                  }}
-                >
-                  Active game
-                </Button>
-              ) : null}
-            </nav>
-          </header>
-          {(content?.length ?? 0) > 0 ? (
-            content
-          ) : (
-            <div className={styles.routePlaceholder}>Redirecting…</div>
-          )}
-          <CredentialVaultDialog />
-        </div>
-      </div>
+      <RootShell
+        outlet={outlet}
+        goToSetup={() => {
+          setupRoute.go(undefined, true)
+        }}
+        goToGames={() => {
+          gamesRoute.go(undefined, true)
+        }}
+        goToGame={(gameId) => {
+          gameRoute.go({ gameId }, true)
+        }}
+      />
     )
   },
 }, 'routes.root')

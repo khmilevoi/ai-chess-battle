@@ -1,6 +1,6 @@
 import { isActorKey } from '@/actors/registry'
 import { presentError } from '@/shared/errors'
-import { PrimaryButton } from '@/shared/ui/Button'
+import { PrimaryButton, SecondaryButton } from '@/shared/ui/Button'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
 import { ActorSettingsFields } from './actorSettings'
 import type { MatchSetupModel } from './model'
@@ -100,6 +100,22 @@ export const MatchSetupPage = reatomMemo(({
               <span>{activeGameSummary.turn} turn</span>
               <span>{activeGameSummary.isFinished ? 'finished' : 'in progress'}</span>
             </div>
+          </div>
+          <div className={styles.resumeActions}>
+            <SecondaryButton
+              onClick={() => {
+                model.resumeActiveMatch()
+              }}
+            >
+              Resume Match
+            </SecondaryButton>
+            <SecondaryButton
+              onClick={() => {
+                model.openGames()
+              }}
+            >
+              Open Archive
+            </SecondaryButton>
           </div>
         </section>
       ) : null}

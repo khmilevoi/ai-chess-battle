@@ -1,10 +1,7 @@
 import {
   useEffect,
   useRef,
-  useId,
-  useState,
   type ComponentType,
-  type CSSProperties,
 } from 'react'
 import { getRegisteredActor } from '@/actors/registry'
 import type { ActorMatchInfoProps } from '@/actors/types'
@@ -37,54 +34,6 @@ function getActorControlsNotice({
   return null
 }
 
-function getBoardModeLabel({
-  isAtLatestMove,
-  boardInteractive,
-  phase,
-}: Pick<GameModel, 'isAtLatestMove' | 'boardInteractive' | 'phase'>) {
-  if (!isAtLatestMove()) {
-    return 'Replay mode'
-  }
-
-  if (phase() === 'gameOver') {
-    return 'Final position'
-  }
-
-  if (phase() === 'actorError') {
-    return 'Turn paused'
-  }
-
-  if (boardInteractive()) {
-    return 'Interactive board'
-  }
-
-  return 'Live board'
-}
-
-function getBoardHint({
-  isAtLatestMove,
-  boardInteractive,
-  phase,
-}: Pick<GameModel, 'isAtLatestMove' | 'boardInteractive' | 'phase'>) {
-  if (!isAtLatestMove()) {
-    return 'Jump through the move list on the right to inspect earlier positions, then return to the live tail to resume play.'
-  }
-
-  if (phase() === 'gameOver') {
-    return 'The final board remains available for review.'
-  }
-
-  if (phase() === 'actorError') {
-    return 'The active turn failed. Resolve the issue or retry the turn to continue.'
-  }
-
-  if (boardInteractive()) {
-    return 'Select a piece, then choose one of the highlighted legal target squares.'
-  }
-
-  return 'The board will update automatically as the active side completes its turn.'
-}
-
 function formatMoveLabel(uci: string) {
   const from = uci.slice(0, 2)
   const to = uci.slice(2, 4)
@@ -99,26 +48,6 @@ function formatMoveLabel(uci: string) {
 
 function formatMoveCount(count: number) {
   return `${count} move${count === 1 ? '' : 's'}`
-}
-
-function formatActorPanelTitle(sides: Array<keyof typeof sideLabels>) {
-  if (sides.length === 2) {
-    return 'White & Black'
-  }
-
-  return sideLabels[sides[0]]
-}
-
-function getActorPanelStateLabel(actorPanel: ActorPanelEntry) {
-  if (actorPanel.activeSide === null) {
-    return 'Standing by'
-  }
-
-  if (actorPanel.sides.length === 1) {
-    return 'To move'
-  }
-
-  return `${sideLabels[actorPanel.activeSide]} to move`
 }
 
 function resolveControlsComponent(
@@ -149,18 +78,10 @@ function renderActorControlsPanel({
   actorPanels: Array<ActorPanelEntry>
   controlsNotice: string | null
 }) {
+  const showActorNames = actorPanels.length > 1
+
   return (
     <aside className={[styles.panel, styles.actorPanel].join(' ')}>
-      <div className={styles.panelHeader}>
-        <div className={styles.panelHeading}>
-          <p className={styles.panelEyebrow}>Side management</p>
-          <h2 className={styles.panelTitle}>Actors</h2>
-        </div>
-        <p className={styles.panelNote}>
-          Per-side controls, shared automatically when both sides use the same actor.
-        </p>
-      </div>
-
       {controlsNotice ? (
         <div className={styles.inlineNotice}>
           <p className={styles.inlineNoticeLabel}>Controls unavailable</p>
@@ -172,47 +93,13 @@ function renderActorControlsPanel({
         {actorPanels.map((actorPanel) => {
           const descriptor = getRegisteredActor(actorPanel.actorKey)
           const ControlsComponent = resolveControlsComponent(actorPanel)
-          const cardClassName = [
-            styles.actorSection,
-            actorPanel.isActive ? styles.actorSectionActive : styles.actorSectionIdle,
-          ].join(' ')
           return (
-            <section key={actorPanel.panelKey} className={cardClassName}>
-              <div className={styles.actorSectionHeader}>
-                <div className={styles.actorSectionBadges}>
-                  {actorPanel.sides.map((side) => (
-                    <span
-                      key={side}
-                      className={[
-                        styles.sideBadge,
-                        side === 'white' ? styles.sideBadgeWhite : styles.sideBadgeBlack,
-                      ].join(' ')}
-                    >
-                      {sideLabels[side]}
-                    </span>
-                  ))}
-                  <span
-                    className={[
-                      styles.actorStateBadge,
-                      actorPanel.isActive
-                        ? styles.actorStateBadgeActive
-                        : styles.actorStateBadgeIdle,
-                    ].join(' ')}
-                  >
-                    {getActorPanelStateLabel(actorPanel)}
-                  </span>
+            <section key={actorPanel.panelKey} className={styles.actorSection}>
+              {showActorNames ? (
+                <div className={styles.actorIdentity}>
+                  <h3 className={styles.actorTitle}>{actorPanel.displayName}</h3>
                 </div>
-                <span className={styles.actorModeLabel}>
-                  {ControlsComponent ? 'Custom controls' : 'Board input'}
-                </span>
-              </div>
-
-              <div className={styles.actorIdentity}>
-                <h3 className={styles.actorTitle}>{actorPanel.displayName}</h3>
-                <p className={styles.actorSummary}>
-                  {formatActorPanelTitle(actorPanel.sides)} · {descriptor.summary}
-                </p>
-              </div>
+              ) : null}
 
               {ControlsComponent && controlsNotice === null ? (
                 <div className={styles.actorControlsSlot}>
@@ -226,12 +113,12 @@ function renderActorControlsPanel({
               ) : (
                 <div className={styles.actorInfoCard}>
                   <p className={styles.actorInfoTitle}>
-                    {ControlsComponent ? 'Controls are currently read-only' : 'This side uses direct board input'}
+                    {ControlsComponent ? 'Read-only' : 'Board input'}
                   </p>
                   <p className={styles.actorInfoText}>
                     {ControlsComponent
                       ? controlsNotice ?? descriptor.summary
-                      : 'Moves are entered directly on the board when this side is active.'}
+                      : 'Move on the board when this side is active.'}
                   </p>
                 </div>
               )}
@@ -243,75 +130,55 @@ function renderActorControlsPanel({
   )
 }
 
-function renderMatchInfoDisclosure({
+function renderMatchInfoPanel({
   matchInfoEntries,
-  open,
-  contentId,
-  onToggle,
 }: {
   matchInfoEntries: Array<MatchInfoEntry>
-  open: boolean
-  contentId: string
-  onToggle: () => void
 }) {
   return (
-    <div className={styles.matchInfoDisclosure}>
-      <button
-        type="button"
-        className={styles.matchInfoToggle}
-        aria-expanded={open}
-        aria-controls={contentId}
-        onClick={onToggle}
-      >
-        <span className={styles.matchInfoToggleCopy}>
-          <span className={styles.matchInfoToggleLabel}>Match info</span>
-          <span className={styles.matchInfoToggleHint}>
-            Saved actor setup for white and black.
-          </span>
-        </span>
-        <span className={styles.matchInfoToggleState}>{open ? 'Hide' : 'Show'}</span>
-      </button>
-
-      {open ? (
-        <div id={contentId} className={styles.matchInfoBody}>
-          <div className={styles.matchInfoSections}>
-            {matchInfoEntries.map((matchInfoEntry) => {
-              const MatchInfoComponent = resolveMatchInfoComponent(matchInfoEntry)
-
-              return (
-                <section key={matchInfoEntry.side} className={styles.matchInfoSection}>
-                  <div className={styles.matchInfoHeader}>
-                    <span
-                      className={[
-                        styles.sideBadge,
-                        matchInfoEntry.side === 'white'
-                          ? styles.sideBadgeWhite
-                          : styles.sideBadgeBlack,
-                      ].join(' ')}
-                    >
-                      {sideLabels[matchInfoEntry.side]}
-                    </span>
-                    <span className={styles.matchInfoBadge}>Read-only</span>
-                  </div>
-
-                  <div className={styles.actorIdentity}>
-                    <h3 className={styles.actorTitle}>{matchInfoEntry.displayName}</h3>
-                    <p className={styles.actorSummary}>{matchInfoEntry.summary}</p>
-                  </div>
-
-                  <div className={styles.matchInfoSlot}>
-                    <MatchInfoComponent
-                      side={matchInfoEntry.side}
-                      value={matchInfoEntry.actorConfig}
-                    />
-                  </div>
-                </section>
-              )
-            })}
-          </div>
+    <>
+      <div className={styles.panelHeader}>
+        <div className={styles.panelHeading}>
+          <p className={styles.panelEyebrow}>Match info</p>
+          <h2 className={styles.panelTitle}>Saved setup</h2>
         </div>
-      ) : null}
-    </div>
+      </div>
+
+      <div className={styles.matchInfoSections}>
+        {matchInfoEntries.map((matchInfoEntry) => {
+          const MatchInfoComponent = resolveMatchInfoComponent(matchInfoEntry)
+
+          return (
+            <section key={matchInfoEntry.side} className={styles.matchInfoSection}>
+              <div className={styles.matchInfoHeader}>
+                <span
+                  className={[
+                    styles.sideBadge,
+                    matchInfoEntry.side === 'white'
+                      ? styles.sideBadgeWhite
+                      : styles.sideBadgeBlack,
+                  ].join(' ')}
+                >
+                  {sideLabels[matchInfoEntry.side]}
+                </span>
+              </div>
+
+              <div className={styles.actorIdentity}>
+                <h3 className={styles.actorTitle}>{matchInfoEntry.displayName}</h3>
+                <p className={styles.actorSummary}>{matchInfoEntry.summary}</p>
+              </div>
+
+              <div className={styles.matchInfoSlot}>
+                <MatchInfoComponent
+                  side={matchInfoEntry.side}
+                  value={matchInfoEntry.actorConfig}
+                />
+              </div>
+            </section>
+          )
+        })}
+      </div>
+    </>
   )
 }
 
@@ -320,11 +187,7 @@ export const GamePage = reatomMemo(({
 }: {
   model: GameModel
 }) => {
-  const boardPanelRef = useRef<HTMLDivElement | null>(null)
-  const historyListRef = useRef<HTMLDivElement | null>(null)
-  const matchInfoId = useId()
-  const [boardPanelHeight, setBoardPanelHeight] = useState<number | null>(null)
-  const [matchInfoOpen, setMatchInfoOpen] = useState(false)
+  const historyListRef = useRef<HTMLOListElement | null>(null)
   const snapshot = model.snapshot()
   const phase = model.phase()
   const runtimeError = model.runtimeError()
@@ -338,7 +201,6 @@ export const GamePage = reatomMemo(({
   const selectedSquare = model.selectedSquare()
   const selectedLegalMoves = model.selectedLegalMoves()
   const movableSquares = model.movableSquares()
-  const statusText = model.statusText()
   const statusView = model.statusView()
   const boardInteractive = model.boardInteractive()
   const actorPanels = model.actorPanels()
@@ -348,47 +210,8 @@ export const GamePage = reatomMemo(({
     isAtLatestMove: model.isAtLatestMove,
     phase: model.phase,
   })
-  const boardModeLabel = getBoardModeLabel({
-    isAtLatestMove: model.isAtLatestMove,
-    boardInteractive: model.boardInteractive,
-    phase: model.phase,
-  })
-  const boardHint = getBoardHint({
-    isAtLatestMove: model.isAtLatestMove,
-    boardInteractive: model.boardInteractive,
-    phase: model.phase,
-  })
   const currentViewLabel =
     historyCursor === latestMoveCount ? 'Live tail' : `Move ${historyCursor}`
-
-  useEffect(() => {
-    const boardPanel = boardPanelRef.current
-
-    if (!boardPanel) {
-      return
-    }
-
-    const syncBoardPanelHeight = () => {
-      const nextHeight = Math.round(boardPanel.getBoundingClientRect().height)
-      setBoardPanelHeight(nextHeight > 0 ? nextHeight : null)
-    }
-
-    syncBoardPanelHeight()
-
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-
-    const observer = new ResizeObserver(() => {
-      syncBoardPanelHeight()
-    })
-
-    observer.observe(boardPanel)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [])
 
   useEffect(() => {
     const previousMoveCount = previousMoveCountRef.current
@@ -410,14 +233,9 @@ export const GamePage = reatomMemo(({
     historyList.scrollTop = historyList.scrollHeight
   }, [historyCursor, latestMoveCount])
 
-  const pageStyle =
-    boardPanelHeight === null
-      ? undefined
-      : ({ '--board-panel-height': `${boardPanelHeight}px` } as CSSProperties)
-
   if (!snapshot) {
     return (
-      <div className={styles.page} style={pageStyle}>
+      <div className={styles.page}>
         <div className={styles.errorBox}>
           {runtimeError?.message ?? 'Failed to initialize the saved match.'}
         </div>
@@ -426,40 +244,22 @@ export const GamePage = reatomMemo(({
   }
 
   return (
-    <div className={styles.page} style={pageStyle}>
-      <header className={styles.header}>
-        <div>
-          <p className={styles.eyebrow}>Saved game</p>
-          <h1 className={styles.title}>Live Match</h1>
-        </div>
-        <div className={styles.headerActions}>
-          {phase === 'actorError' && statusView.canRetry ? (
-            <Button
-              onClick={async () => {
-                await model.retryTurn()
-              }}
-            >
-              Retry turn
-            </Button>
-          ) : null}
-        </div>
-      </header>
-
+    <div className={styles.page}>
       <div className={styles.stage}>
-        <section
-          className={[
-            styles.statusCard,
-            statusView.tone === 'error'
-              ? styles.errorTone
-              : statusView.tone === 'warning'
-              ? styles.warningTone
-              : statusView.tone === 'success'
-              ? styles.successTone
-              : styles.neutralTone,
-          ].join(' ')}
-          aria-live="polite"
-        >
-          <div className={styles.statusHero}>
+        <aside className={[styles.rail, styles.leftRail].join(' ')}>
+          <section
+            className={[
+              styles.statusCard,
+              statusView.tone === 'error'
+                ? styles.errorTone
+                : statusView.tone === 'warning'
+                ? styles.warningTone
+                : statusView.tone === 'success'
+                ? styles.successTone
+                : styles.neutralTone,
+            ].join(' ')}
+            aria-live="polite"
+          >
             <div className={styles.statusLead}>
               <p className={styles.panelEyebrow}>Match state</p>
               <div className={styles.statusTitleRow}>
@@ -475,78 +275,51 @@ export const GamePage = reatomMemo(({
               <p className={styles.statusDetail}>{statusView.detail}</p>
             </div>
 
-            <div className={styles.metricGrid}>
-              <div className={styles.metricCard}>
-                <span className={styles.metricLabel}>Turn</span>
-                <strong className={styles.metricValue}>{sideLabels[snapshot.turn]}</strong>
-              </div>
-              <div className={styles.metricCard}>
-                <span className={styles.metricLabel}>View</span>
-                <strong className={styles.metricValue}>{currentViewLabel}</strong>
-              </div>
-              <div className={styles.metricCard}>
-                <span className={styles.metricLabel}>Moves</span>
-                <strong className={styles.metricValue}>{latestMoveCount}</strong>
-              </div>
-              <div className={styles.metricCard}>
-                <span className={styles.metricLabel}>Actor</span>
-                <strong className={styles.metricValue}>
-                  {statusView.actorLabel ?? 'System'}
-                </strong>
-              </div>
+            <div className={styles.statusMeta}>
+              <span>{sideLabels[snapshot.turn]} to move</span>
+              <span>{formatMoveCount(latestMoveCount)}</span>
+              {!isAtLatestMove ? (
+                <span>{currentViewLabel}</span>
+              ) : null}
             </div>
-          </div>
 
-          <div className={styles.statusPills}>
-            <span className={styles.statusPill}>{statusText}</span>
-            <span className={styles.statusPill}>{boardModeLabel}</span>
-            {!isAtLatestMove ? (
-              <span className={styles.statusPillMuted}>History view</span>
+            {phase === 'actorError' && statusView.canRetry ? (
+              <div className={styles.statusActions}>
+                <Button
+                  className={styles.statusActionButton}
+                  onClick={async () => {
+                    await model.retryTurn()
+                  }}
+                >
+                  Retry turn
+                </Button>
+              </div>
             ) : null}
-            {phase === 'actorError' ? (
-              <span className={styles.statusPillCritical}>Action required</span>
-            ) : null}
-          </div>
 
-          {renderMatchInfoDisclosure({
-            matchInfoEntries,
-            open: matchInfoOpen,
-            contentId: matchInfoId,
-            onToggle: () => {
-              setMatchInfoOpen((state) => !state)
-            },
-          })}
-
-          {runtimeError && phase === 'actorError' ? (
-            <div className={styles.errorBanner}>
-              <p className={styles.errorBannerLabel}>Runtime error</p>
-              <p className={styles.errorDetail}>{runtimeError.message}</p>
-            </div>
-          ) : null}
-        </section>
-
-        {hasActorControls
-          ? renderActorControlsPanel({
-              actorPanels,
-              controlsNotice,
-            })
-          : null}
-
-        <div className={styles.boardRow}>
-          <section
-            ref={boardPanelRef}
-            className={[styles.panel, styles.boardPanel].join(' ')}
-          >
-            <div className={styles.panelHeader}>
-              <div className={styles.panelHeading}>
-                <p className={styles.panelEyebrow}>Playfield</p>
-                <h2 className={styles.panelTitle}>Board</h2>
+            {runtimeError && phase === 'actorError' ? (
+              <div className={styles.errorBanner}>
+                <p className={styles.errorBannerLabel}>Runtime error</p>
+                <p className={styles.errorDetail}>{runtimeError.message}</p>
               </div>
-              <span className={styles.boardModeBadge}>{boardModeLabel}</span>
-            </div>
+            ) : null}
+          </section>
 
-            <p className={styles.boardHint}>{boardHint}</p>
+          {hasActorControls
+            ? renderActorControlsPanel({
+                actorPanels,
+                controlsNotice,
+              })
+            : null}
 
+          <aside className={[styles.panel, styles.matchInfoPanel].join(' ')}>
+            {renderMatchInfoPanel({
+              matchInfoEntries,
+            })}
+          </aside>
+        </aside>
+
+        <main className={styles.boardZone} aria-label="Chess board area">
+          <section className={styles.boardPanel}>
             <Board
               snapshot={snapshot}
               selectedSquare={selectedSquare}
@@ -558,7 +331,9 @@ export const GamePage = reatomMemo(({
               }}
             />
           </section>
+        </main>
 
+        <aside className={[styles.rail, styles.rightRail].join(' ')}>
           <aside className={[styles.panel, styles.historyPanel].join(' ')}>
             <div className={styles.historyTop}>
               <div className={styles.panelHeader}>
@@ -582,6 +357,15 @@ export const GamePage = reatomMemo(({
               <div className={styles.historyActions}>
                 <Button
                   className={styles.historyActionButton}
+                  disabled={isAtLatestMove}
+                  onClick={() => {
+                    model.goToMove(latestMoveCount)
+                  }}
+                >
+                  Back to latest
+                </Button>
+                <Button
+                  className={styles.historyActionButton}
                   disabled={!canGoPrevious}
                   onClick={() => {
                     model.goToPreviousMove()
@@ -601,51 +385,52 @@ export const GamePage = reatomMemo(({
               </div>
             </div>
 
-            <div ref={historyListRef} className={styles.historyList}>
-              <Button
-                className={[
-                  styles.historyItem,
-                  historyCursor === 0 ? styles.historyItemActive : '',
-                ].join(' ')}
-                onClick={() => {
-                  model.goToMove(0)
-                }}
-              >
-                <span className={styles.historyMoveNumber}>0</span>
-                <span className={styles.historyMoveBody}>
-                  <span className={styles.historyMovePrimary}>Initial position</span>
-                  <span className={styles.historyMoveSecondary}>
-                    Starting board setup
+            <ol ref={historyListRef} className={styles.historyList}>
+              <li className={styles.historyStep}>
+                <Button
+                  className={[
+                    styles.historyItem,
+                    historyCursor === 0 ? styles.historyItemActive : '',
+                  ].join(' ')}
+                  onClick={() => {
+                    model.goToMove(0)
+                  }}
+                >
+                  <span className={styles.historyMoveNumber}>0</span>
+                  <span className={styles.historyMoveBody}>
+                    <span className={styles.historyMovePrimary}>Initial position</span>
+                    <span className={styles.historyMoveSecondary}>Starting board</span>
                   </span>
-                </span>
-              </Button>
+                </Button>
+              </li>
               {historyMoves.length === 0 ? (
-                <div className={styles.emptyHistory}>No moves yet.</div>
+                <li className={styles.emptyHistory}>No moves yet.</li>
               ) : (
                 historyMoves.map((move) => (
-                  <Button
-                    key={`${move.moveNumber}-${move.uci}`}
-                    className={[
-                      styles.historyItem,
-                      move.moveNumber === historyCursor ? styles.historyItemActive : '',
-                    ].join(' ')}
-                    onClick={() => {
-                      model.goToMove(move.moveNumber)
-                    }}
-                  >
-                    <span className={styles.historyMoveNumber}>{move.moveNumber}</span>
-                    <span className={styles.historyMoveBody}>
-                      <span className={styles.historyMovePrimary}>
-                        {formatMoveLabel(move.uci)}
+                  <li key={`${move.moveNumber}-${move.uci}`} className={styles.historyStep}>
+                    <Button
+                      className={[
+                        styles.historyItem,
+                        move.moveNumber === historyCursor ? styles.historyItemActive : '',
+                      ].join(' ')}
+                      onClick={() => {
+                        model.goToMove(move.moveNumber)
+                      }}
+                    >
+                      <span className={styles.historyMoveNumber}>{move.moveNumber}</span>
+                      <span className={styles.historyMoveBody}>
+                        <span className={styles.historyMovePrimary}>
+                          {formatMoveLabel(move.uci)}
+                        </span>
+                        <span className={styles.historyMoveSecondary}>{move.uci}</span>
                       </span>
-                      <span className={styles.historyMoveSecondary}>{move.uci}</span>
-                    </span>
-                  </Button>
+                    </Button>
+                  </li>
                 ))
               )}
-            </div>
+            </ol>
           </aside>
-        </div>
+        </aside>
       </div>
     </div>
   )

@@ -1,173 +1,256 @@
 .page {
   display: grid;
-  gap: 28px;
+  gap: var(--space-6);
 }
 
 .header {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: var(--brutalist-border-strong);
 }
 
 .eyebrow {
+  margin: 0;
   font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .title {
+  max-width: 880px;
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2.6rem, 6vw, 5rem);
+  font-size: 4rem;
+  font-weight: 700;
   line-height: 0.98;
 }
 
 .subtitle {
-  max-width: 60ch;
+  max-width: 64ch;
+  margin: 0;
   font-size: 1rem;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  font-weight: 600;
+  line-height: 1.55;
 }
 
 .resumeCard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-5);
   align-items: center;
-  padding: 20px 24px;
-  border: 1px solid #050505;
-  background: linear-gradient(120deg, #050505 0%, #4c4c4c 34%, #bdbdbd 72%, #ffffff 100%);
+  padding: var(--space-5);
+  border: var(--brutalist-border-strong);
+  background:
+    repeating-linear-gradient(
+      135deg,
+      var(--color-paper),
+      var(--color-paper) 10px,
+      var(--color-paper-muted) 10px,
+      var(--color-paper-muted) 20px
+    );
+  box-shadow: var(--brutalist-shadow);
 }
 
 .resumeMeta {
   display: grid;
-  gap: 8px;
-  padding: 16px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: linear-gradient(135deg, rgba(5, 5, 5, 0.82), rgba(50, 50, 50, 0.62));
-  color: #ffffff;
-  backdrop-filter: blur(4px);
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .resumeTitle {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.9rem;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .resumeSummary {
   margin: 0;
   font-size: 1rem;
+  font-weight: 700;
 }
 
 .resumeFacts {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.resumeFacts span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: var(--brutalist-border);
+  background: var(--color-paper);
+}
+
+.resumeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
 }
 
 .panel {
   display: grid;
   align-items: flex-start;
-  gap: 18px;
+  gap: var(--space-5);
   min-height: 100%;
-  padding: 24px;
-  border: 1px solid #050505;
+  padding: var(--space-6);
+  border: var(--brutalist-border-strong);
+  box-shadow: var(--brutalist-shadow);
 }
 
 .lightPanel {
-  background: #ffffff;
-  color: #050505;
+  background: var(--color-paper);
+  color: var(--color-ink);
 }
 
 .darkPanel {
-  background: #050505;
-  color: #ffffff;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .darkPanel input,
 .darkPanel select {
-  background: #050505;
-  color: #ffffff;
-  border-color: #ffffff;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border-color: var(--color-paper);
+}
+
+.darkPanel input:disabled,
+.darkPanel select:disabled {
+  background: var(--color-gray-dark);
+  color: var(--color-paper-muted);
 }
 
 .sideTitle {
   margin: 0;
   font-family: var(--font-display);
   font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.05;
 }
 
 .summary {
-  margin: 0;
-  font-size: 0.95rem;
+  margin: var(--space-2) 0 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
-.fieldGroup {
+.fieldGroup,
+.customFields {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .fieldGroup label,
 .customFields label {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .fieldGroup span,
 .customFields span {
   font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .fieldGroup select,
 .customFields input,
 .customFields select {
-  min-height: 46px;
-  padding: 10px 12px;
-  border: 1px solid currentColor;
+  width: 100%;
+  min-height: 48px;
+  border-width: 2px;
+  font-family: var(--font-body);
+  font-weight: 700;
 }
 
-.customFields {
-  display: grid;
-  gap: 14px;
+.customFields p {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .errorList {
   margin: 0;
-  padding-left: 18px;
+  padding: var(--space-3) var(--space-4);
+  border: var(--brutalist-border);
+  background: var(--color-error);
+  color: var(--color-ink);
   font-size: 0.92rem;
+  font-weight: 700;
+  list-style-position: inside;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
 }
 
 .inlineError {
-  padding: 14px 16px;
-  border: 1px solid #050505;
-  background: #ffffff;
+  padding: var(--space-4);
+  border: var(--brutalist-border-strong);
+  background: var(--color-error);
+  box-shadow: var(--brutalist-shadow);
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {
+  .title {
+    font-size: 2.6rem;
+  }
+
   .resumeCard {
     grid-template-columns: 1fr;
   }
 
+  .resumeActions,
+  .actions {
+    justify-content: flex-start;
+  }
+
   .grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .title {
+    font-size: 2.15rem;
+  }
+
+  .panel,
+  .resumeCard {
+    padding: var(--space-4);
+  }
+
+  .resumeActions {
+    display: grid;
   }
 }

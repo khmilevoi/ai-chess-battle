@@ -30,23 +30,20 @@ export const AiActorControls = reatomMemo(({
         ? 'White'
         : 'Black'
   const buttonDisabled = !waitForConfirmation || confirmationPending === null
+  const stateText = waitForConfirmation
+    ? confirmationPending
+      ? pendingSide
+        ? `${sideLabels[pendingSide]} is waiting.`
+        : 'Waiting for approval.'
+      : 'Approval is armed.'
+    : 'Requests send automatically.'
 
   return (
     <div className={styles.controls}>
       <div className={styles.header}>
         <div className={styles.titleWrap}>
-          <p className={styles.eyebrow}>{waitingLabel} request controls</p>
-          <p className={styles.summary}>
-            {waitForConfirmation
-              ? confirmationPending
-                ? pendingSide
-                  ? `${sideLabels[pendingSide]} is waiting for your approval.`
-                  : 'Waiting for your approval.'
-                : isShared
-                  ? `Both sides pause before the next ${providerLabel} request.`
-                  : 'Next turn pauses for approval.'
-              : `${providerLabel} requests are sent automatically.`}
-          </p>
+          <p className={styles.eyebrow}>{waitingLabel}</p>
+          <p className={styles.summary}>{stateText}</p>
         </div>
         <span
           className={[
@@ -69,27 +66,22 @@ export const AiActorControls = reatomMemo(({
         />
         <span className={styles.toggleCopy}>
           <span className={styles.toggleTitle}>
-            Wait for confirmation before sending the {providerLabel} request
+            Confirm before {providerLabel} request
           </span>
-          <span className={styles.toggleHint}>
-            Enable this only when you want to inspect the position before the API
-            call.
-          </span>
+          <span className={styles.toggleHint}>Pause API calls until approved.</span>
         </span>
       </label>
 
       <div className={styles.actionCard}>
         <div className={styles.actionMeta}>
-          <p className={styles.actionLabel}>Current state</p>
+          <p className={styles.actionLabel}>Next action</p>
           <p className={styles.actionText}>
             {waitForConfirmation
               ? confirmationPending
                 ? pendingSide
-                  ? `Ready to send for ${sideLabels[pendingSide]}.`
+                  ? `Send for ${sideLabels[pendingSide]}.`
                   : 'Ready to send.'
-                : isShared
-                  ? 'Shared confirmation is armed for both sides.'
-                  : 'Standing by for the next turn.'
+                : 'Waiting for the next turn.'
               : 'No confirmation step required.'}
           </p>
         </div>

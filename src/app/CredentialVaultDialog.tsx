@@ -10,6 +10,7 @@ import {
   vaultStatusAtom,
 } from '@/shared/storage/credentialVault'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
+import { prevent } from '@/shared/ui/prevent'
 import {
   closeCredentialVaultDialog,
   credentialVaultDialogOpenAtom,
@@ -115,7 +116,7 @@ export const CredentialVaultDialog = reatomMemo(() => {
       dismissible={!isSubmitting}
     >
       {vaultStatus === 'unconfigured' ? (
-        <div className={styles.vaultForm}>
+        <form className={styles.vaultForm} onSubmit={prevent(() => void submitSetup())}>
           <label>
             <span>Master password</span>
             <input
@@ -135,15 +136,15 @@ export const CredentialVaultDialog = reatomMemo(() => {
             />
           </label>
           <div className={styles.vaultActions}>
-            <Button disabled={isSubmitting} onClick={() => void submitSetup()}>
+            <Button disabled={isSubmitting} type="submit">
               Set up vault
             </Button>
           </div>
-        </div>
+        </form>
       ) : null}
 
       {vaultStatus === 'locked' ? (
-        <div className={styles.vaultForm}>
+        <form className={styles.vaultForm} onSubmit={prevent(() => void submitUnlock())}>
           <label>
             <span>Master password</span>
             <input
@@ -154,15 +155,15 @@ export const CredentialVaultDialog = reatomMemo(() => {
             />
           </label>
           <div className={styles.vaultActions}>
-            <Button disabled={isSubmitting} onClick={() => void submitUnlock()}>
+            <Button disabled={isSubmitting} type="submit">
               Unlock vault
             </Button>
           </div>
-        </div>
+        </form>
       ) : null}
 
       {vaultStatus === 'unlocked' ? (
-        <div className={styles.vaultForm}>
+        <form className={styles.vaultForm} onSubmit={prevent(() => {})}>
           <p className={styles.vaultMessage}>
             Stored API keys stay encrypted in this browser profile until you lock or
             reset the vault.
@@ -198,7 +199,7 @@ export const CredentialVaultDialog = reatomMemo(() => {
               Reset vault
             </Button>
           </div>
-        </div>
+        </form>
       ) : null}
 
       {message ? <p className={styles.vaultMessage}>{message}</p> : null}

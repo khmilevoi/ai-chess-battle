@@ -1,64 +1,72 @@
 .controls {
   display: grid;
-  gap: 12px;
+  gap: var(--space-2);
 }
 
 .header {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
-  align-items: start;
+  gap: var(--space-2);
+  align-items: center;
 }
 
 .titleWrap {
   display: grid;
-  gap: 6px;
+  gap: 2px;
+  min-width: 0;
 }
 
 .eyebrow {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .summary {
   margin: 0;
+  overflow-wrap: anywhere;
   font-size: 0.84rem;
+  font-weight: 600;
   line-height: 1.45;
 }
 
 .stateBadge {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
-  padding: 6px 10px;
-  border: 1px solid #050505;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 2px solid currentColor;
   font-family: var(--font-mono);
-  font-size: 0.74rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .stateBadgeManual {
-  background: #050505;
-  color: #ffffff;
+  background: var(--color-paper);
+  color: var(--color-ink);
 }
 
 .stateBadgeAuto {
-  background: #ffffff;
-  color: #050505;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .toggleCard {
   display: grid;
-  gap: 10px;
+  gap: var(--space-2);
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   cursor: pointer;
-  padding: 0;
+  padding: var(--space-2);
+  border: 2px solid currentColor;
+  background: var(--color-paper);
+  color: var(--color-ink);
 }
 
 .checkbox {
@@ -68,78 +76,76 @@
   width: 22px;
   height: 22px;
   margin: 0;
-  border: 1px solid #050505;
-  background: #ffffff;
+  border: 2px solid currentColor;
+  background: var(--color-paper);
   transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast);
 }
 
 .checkbox::after {
   content: '';
-  width: 9px;
-  height: 5px;
-  border-left: 2px solid transparent;
-  border-bottom: 2px solid transparent;
+  width: 10px;
+  height: 6px;
+  border-left: 3px solid transparent;
+  border-bottom: 3px solid transparent;
   transform: rotate(-45deg) translate(1px, -1px);
 }
 
 .checkbox:checked {
-  background: #050505;
-  border-color: #050505;
-  box-shadow: 3px 3px 0 rgba(5, 5, 5, 0.12);
+  background: var(--color-ink);
+  box-shadow: 3px 3px 0 var(--color-paper);
 }
 
 .checkbox:checked::after {
-  border-left-color: #ffffff;
-  border-bottom-color: #ffffff;
+  border-left-color: var(--color-paper);
+  border-bottom-color: var(--color-paper);
 }
 
 .checkbox:focus-visible {
-  outline: 2px solid #050505;
-  outline-offset: 2px;
+  outline: var(--focus-ring);
+  outline-offset: 3px;
 }
 
 .toggleCopy {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .toggleTitle {
-  font-weight: 600;
-  font-size: 0.82rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  font-size: 0.84rem;
   line-height: 1.35;
 }
 
 .toggleHint,
 .actionText {
+  overflow-wrap: anywhere;
   font-size: 0.78rem;
+  font-weight: 600;
   line-height: 1.45;
 }
 
 .actionCard {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  padding-top: 12px;
-  border-top: 1px solid rgba(5, 5, 5, 0.14);
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 2px solid currentColor;
 }
 
 .actionMeta {
   display: grid;
-  gap: 3px;
-  max-width: 20ch;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .actionLabel {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -149,5 +155,8 @@
 
 .actionButton {
   justify-content: center;
-  min-width: 160px;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
 }

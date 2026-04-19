@@ -89,7 +89,7 @@ function createOpenAiResponse(uci: string) {
 }
 
 async function expectLiveMatchLoaded(expectedMoves: Array<string> = []) {
-  await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
+  await screen.findByRole('main', { name: 'Chess board area' }, { timeout: 5000 })
   expect(screen.queryByText('Loading match...')).not.toBeInTheDocument()
 
   for (const move of expectedMoves) {
@@ -131,7 +131,6 @@ describe('App integration', () => {
     expect(screen.getByRole('heading', { name: 'AI Chess Battle' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Setup' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Games' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'No vault configured' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Set up vault' }))
@@ -153,7 +152,6 @@ describe('App integration', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
-    expect(screen.getByRole('heading', { name: 'Vault unlocked' })).toBeInTheDocument()
     expect(screen.getByText('Credential vault is ready in this tab.')).toBeInTheDocument()
   }, 15000)
 
@@ -237,7 +235,6 @@ describe('App integration', () => {
     expect(
       await screen.findByRole('dialog', { name: 'Set up credential vault' }, { timeout: 5000 }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'No vault configured' })).toBeInTheDocument()
     expect(screen.getByText('Credential vault reset.')).toBeInTheDocument()
   })
 
@@ -260,7 +257,6 @@ describe('App integration', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Unlock vault' }))
 
     expect(await screen.findByRole('dialog', { name: 'Unlock credential vault' })).toBe(dialog)
-    expect(screen.getByRole('heading', { name: 'Vault locked' })).toBeInTheDocument()
     expect(
       await within(dialog).findByText(
         'Saved configuration could not be loaded. Defaults were restored.',
@@ -275,7 +271,7 @@ describe('App integration', () => {
     await screen.findByRole('button', { name: 'Start Match' })
     await user.click(screen.getByRole('button', { name: 'Start Match' }))
 
-    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
+    await expectLiveMatchLoaded()
     expect(window.location.pathname).toMatch(/^\/game\/.+$/)
     expect(screen.getByRole('button', { name: 'Active game' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Back to setup' })).not.toBeInTheDocument()
@@ -284,11 +280,11 @@ describe('App integration', () => {
 
     await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
     expect(screen.getByText('Resume your last game')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Resume Match' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resume Match' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Active game' }))
 
-    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
+    await expectLiveMatchLoaded()
   }, 15000)
 
   it('opens the saved games page and navigates to a selected game', async () => {
@@ -316,7 +312,7 @@ describe('App integration', () => {
 
     await user.click(openGameButtons[0]!)
 
-    await screen.findByRole('heading', { name: 'Live Match' }, { timeout: 5000 })
+    await expectLiveMatchLoaded(['e2e4', 'e7e5'])
     expect(window.location.pathname).toBe(`/game/${savedGame.id}`)
   })
 
@@ -334,6 +330,7 @@ describe('App integration', () => {
 
     await screen.findByText('Resume your last game', undefined, { timeout: 5000 })
     expect(screen.getByText('Resume your last game')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resume Match' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Active game' })).toBeInTheDocument()
   })
 
@@ -427,11 +424,11 @@ describe('App integration', () => {
     }
 
     const checkbox = screen.getByRole('checkbox', {
-      name: /Wait for confirmation before sending the OpenAI request/i,
+      name: /Confirm before OpenAI request/i,
     })
 
     expect(checkbox).toBeChecked()
-    expect(screen.getByText('White is waiting for your approval.')).toBeInTheDocument()
+    expect(screen.getByText('White is waiting.')).toBeInTheDocument()
 
     await user.click(checkbox)
 
@@ -443,7 +440,7 @@ describe('App integration', () => {
     expect(gameRoute.loader.data()).toBe(initialModel)
     expect(
       screen.getByRole('checkbox', {
-        name: /Wait for confirmation before sending the OpenAI request/i,
+        name: /Confirm before OpenAI request/i,
       }),
     ).not.toBeChecked()
     expect(peek(storedGameRecordAtom(game.id))?.actorControls).toEqual({
@@ -480,7 +477,7 @@ describe('App integration', () => {
 
     await expectLiveMatchLoaded()
     const checkbox = screen.getByRole('checkbox', {
-      name: /Wait for confirmation before sending the Gemini request/i,
+      name: /Confirm before Gemini request/i,
     })
 
     expect(checkbox).toBeChecked()

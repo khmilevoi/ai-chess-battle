@@ -1,130 +1,309 @@
 .shell {
+  --shell-padding: var(--space-6);
   min-height: 100vh;
-  padding: 24px;
+  padding: var(--shell-padding);
+  transition: padding 180ms ease;
+}
+
+.content {
+  width: min(100%, 1440px);
+  margin: 0 auto;
 }
 
 .masthead {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: start;
-  margin-bottom: 24px;
+  position: sticky;
+  top: var(--space-4);
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: var(--space-4);
+  align-items: stretch;
+  margin-bottom: var(--space-6);
+  padding: var(--space-3);
+  border: var(--brutalist-border-strong);
+  background: var(--color-paper);
+  box-shadow: var(--brutalist-shadow);
+  transition:
+    margin-bottom 180ms ease,
+    max-block-size 180ms ease,
+    opacity 180ms ease,
+    padding 180ms ease,
+    gap 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease,
+    visibility 180ms ease;
 }
 
 .headerColumn {
   display: grid;
-  gap: 16px;
-  min-width: min(100%, 420px);
+  grid-template-columns: auto minmax(260px, 420px);
+  gap: var(--space-3);
+  align-items: stretch;
+  min-width: 0;
+  transition:
+    gap 180ms ease,
+    grid-template-columns 180ms ease;
 }
 
 .brand {
   display: grid;
-  gap: 4px;
-}
-
-.vaultCard {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid #050505;
-  background: #f6f2e9;
-}
-
-.vaultHeader {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: start;
-}
-
-.vaultEyebrow {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.vaultTitle {
-  margin: 4px 0 0;
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-}
-
-.vaultForm {
-  display: grid;
-  gap: 10px;
-}
-
-.vaultActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.vaultMessage {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-}
-
-.nav {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.navButton {
+  align-content: center;
   min-width: 0;
-}
-
-.navButtonActive {
-  background: #050505;
-  color: #ffffff;
-}
-
-.navButtonActive:hover:not(:disabled) {
-  background: #050505;
+  padding: 0 var(--space-3);
+  border-right: var(--brutalist-border);
+  transition:
+    padding 180ms ease,
+    border-color 180ms ease;
 }
 
 .name {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: font-size 180ms ease;
 }
 
-.content {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 20px;
-  border: 1px solid #050505;
-  background: #ffffff;
+.vaultCard {
+  display: inline-grid;
+  grid-template-columns: minmax(0, auto) auto;
+  gap: var(--space-2);
+  align-items: center;
+  justify-self: start;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: var(--brutalist-border);
+  background: var(--color-paper-soft);
+  transition:
+    padding 180ms ease,
+    gap 180ms ease,
+    background-color 180ms ease;
+}
+
+.vaultStatus {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  transition: font-size 180ms ease;
+}
+
+.vaultForm {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.vaultForm label {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.vaultForm span {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.vaultActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.vaultCard .vaultActions {
+  flex-wrap: nowrap;
+  gap: 0;
+  justify-content: flex-start;
+}
+
+.vaultButton {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 6px;
+  box-shadow: none;
+}
+
+.vaultIcon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  flex: none;
+}
+
+.vaultMessage {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: var(--brutalist-border);
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.nav {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  gap: var(--space-2);
+  align-content: stretch;
+  align-items: stretch;
+  transition: gap 180ms ease;
+}
+
+.navButton {
+  min-width: 0;
+  min-height: 100%;
+  box-shadow: none;
+}
+
+.navButtonActive {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.navButtonActive:hover:not(:disabled) {
+  background: var(--color-ink);
 }
 
 .routePlaceholder {
   min-height: 220px;
   display: grid;
   place-items: center;
+  border: var(--brutalist-border-strong);
+  background: var(--color-paper);
+  box-shadow: var(--brutalist-shadow);
   font-family: var(--font-mono);
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
 }
 
-@media (max-width: 900px) {
-  .shell {
-    padding: 16px;
+.gameShell {
+  --shell-padding: var(--space-3);
+}
+
+.gameContent {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  width: min(100%, 1920px);
+  min-height: calc(100dvh - (var(--shell-padding) * 2));
+}
+
+.gameMasthead {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  box-shadow: 4px 4px 0 var(--color-ink);
+}
+
+.gameMasthead .headerColumn {
+  grid-template-columns: auto minmax(180px, 300px);
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.gameMasthead .brand {
+  padding: 0 var(--space-1);
+}
+
+.gameMasthead .name {
+  font-size: 1.15rem;
+}
+
+.gameMasthead .vaultCard {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1);
+  padding: 2px var(--space-1);
+}
+
+.gameMasthead .nav {
+  gap: var(--space-1);
+}
+
+.gameMasthead .navButton {
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+.gameMasthead .vaultStatus {
+  font-size: 0.62rem;
+}
+
+.gameMasthead .vaultButton {
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 5px;
+}
+
+.gameMasthead .vaultIcon {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 1080px) {
+  .masthead {
+    position: static;
+    grid-template-columns: 1fr;
   }
 
-  .masthead {
-    flex-direction: column;
+  .headerColumn {
+    grid-template-columns: 1fr;
+  }
+
+  .brand {
+    padding: 0;
+    border-right: 0;
   }
 
   .nav {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .gameMasthead .headerColumn {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    --shell-padding: var(--space-3);
+  }
+
+  .masthead {
+    top: var(--space-3);
+    padding: var(--space-2);
+  }
+
+  .vaultCard {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .vaultActions {
     justify-content: flex-start;
   }
 
-  .content {
-    padding: 16px;
+  .nav {
+    grid-template-columns: 1fr;
+  }
+
+  .gameContent {
+    min-height: auto;
   }
 }

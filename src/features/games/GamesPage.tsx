@@ -1,4 +1,4 @@
-import { SecondaryButton } from '@/shared/ui/Button'
+import { PrimaryButton, SecondaryButton } from '@/shared/ui/Button'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
 import type { GamesModel } from './model'
 import styles from './GamesPage.module.css'
@@ -29,6 +29,14 @@ export const GamesPage = reatomMemo(({
             to replay it or continue from the last position when possible.
           </p>
         </div>
+        <PrimaryButton
+          className={styles.newMatchAction}
+          onClick={() => {
+            model.openSetup()
+          }}
+        >
+          New Match
+        </PrimaryButton>
       </header>
 
       {games.length === 0 ? (
@@ -37,6 +45,14 @@ export const GamesPage = reatomMemo(({
           <p className={styles.emptyCopy}>
             Start a match from setup to create the first local record.
           </p>
+          <PrimaryButton
+            className={styles.emptyAction}
+            onClick={() => {
+              model.openSetup()
+            }}
+          >
+            New Match
+          </PrimaryButton>
         </section>
       ) : (
         <div className={styles.grid}>

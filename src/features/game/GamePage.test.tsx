@@ -124,10 +124,10 @@ describe('GamePage', () => {
     expect(screen.getAllByText('White').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Black').length).toBeGreaterThan(0)
     expect(
-      screen.getByText('Wait for confirmation before sending the OpenAI request'),
+      screen.getByText('Confirm before OpenAI request'),
     ).toBeInTheDocument()
     expect(
-      screen.getAllByText(/Moves are selected directly on the board\./).length,
+      screen.getAllByText(/Move on the board when this side is active\./).length,
     ).toBeGreaterThan(0)
     expect(screen.queryByRole('heading', { name: 'Position' })).not.toBeInTheDocument()
   })
@@ -219,8 +219,8 @@ describe('GamePage', () => {
 
     render(<GamePage model={model} />)
 
-    expect(screen.getByText('White & Black request controls')).toBeInTheDocument()
-    expect(screen.getByText('White is waiting for your approval.')).toBeInTheDocument()
+    expect(screen.getAllByText('White & Black').length).toBeGreaterThan(0)
+    expect(screen.getByText('White is waiting.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Send OpenAI request' })).toBeEnabled()
   })
 
@@ -239,8 +239,8 @@ describe('GamePage', () => {
 
     render(<GamePage model={model} />)
 
-    expect(screen.getByText('White & Black request controls')).toBeInTheDocument()
-    expect(screen.getByText('White is waiting for your approval.')).toBeInTheDocument()
+    expect(screen.getAllByText('White & Black').length).toBeGreaterThan(0)
+    expect(screen.getByText('White is waiting.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Send Gemini request' })).toBeEnabled()
   })
 
@@ -263,7 +263,7 @@ describe('GamePage', () => {
       ).toBeGreaterThan(0)
     })
     expect(
-      screen.queryByText('Wait for confirmation before sending the OpenAI request'),
+      screen.queryByText('Confirm before OpenAI request'),
     ).not.toBeInTheDocument()
   })
 
