@@ -3,6 +3,7 @@ import {
   useRef,
   type ComponentType,
 } from 'react'
+import { ChevronFirst, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getRegisteredActor } from '@/actors/registry'
 import type { ActorMatchInfoProps } from '@/actors/types'
 import { Button } from '@/shared/ui/Button'
@@ -391,29 +392,35 @@ export const GamePage = reatomMemo(({
                 <Button
                   className={styles.historyActionButton}
                   disabled={isAtLatestMove}
+                  aria-label="Back to latest"
+                  title="Back to latest"
                   onClick={() => {
                     model.goToMove(latestMoveCount)
                   }}
                 >
-                  Back to latest
+                  <ChevronFirst size={16} aria-hidden />
                 </Button>
                 <Button
                   className={styles.historyActionButton}
                   disabled={!canGoPrevious}
+                  aria-label="Previous move"
+                  title="Previous move"
                   onClick={() => {
                     model.goToPreviousMove()
                   }}
                 >
-                  Previous
+                  <ChevronLeft size={16} aria-hidden />
                 </Button>
                 <Button
                   className={styles.historyActionButton}
                   disabled={!canGoNext}
+                  aria-label="Next move"
+                  title="Next move"
                   onClick={() => {
                     model.goToNextMove()
                   }}
                 >
-                  Next
+                  <ChevronRight size={16} aria-hidden />
                 </Button>
               </div>
             </div>

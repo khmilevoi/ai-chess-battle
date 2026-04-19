@@ -1,5 +1,42 @@
-import { ApiError, GoogleGenAI } from '@google/genai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+const googleGenAiMock = vi.hoisted(() => {
+  class MockApiError extends Error {
+    status: number
+
+    constructor({
+      message,
+      status,
+    }: {
+      message: string
+      status: number
+    }) {
+      super(message)
+      this.name = 'ApiError'
+      this.status = status
+    }
+  }
+
+  const generateContent = vi.fn()
+
+  return {
+    ApiError: MockApiError,
+    GoogleGenAI: vi.fn(function GoogleGenAI() {
+      return {
+      models: {
+        generateContent,
+      },
+      }
+    }),
+    generateContent,
+  }
+})
+
+vi.mock('@google/genai', () => ({
+  ApiError: googleGenAiMock.ApiError,
+  GoogleGenAI: googleGenAiMock.GoogleGenAI,
+}))
+
+import { ApiError } from '@google/genai'
 import {
   GoogleGenAiHttpError,
   GoogleGenAiResponseError,
@@ -82,6 +119,8 @@ describe('GoogleActor', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks()
+    googleGenAiMock.GoogleGenAI.mockClear()
+    googleGenAiMock.generateContent.mockReset()
   })
 
   it('returns transport errors as values', async () => {
@@ -91,8 +130,7 @@ describe('GoogleActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as GoogleGenAI
-    vi.spyOn(client.models, 'generateContent').mockRejectedValue(
+    googleGenAiMock.generateContent.mockRejectedValue(
       new Error('network down'),
     )
 
@@ -189,9 +227,7 @@ describe('GoogleActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as GoogleGenAI
-    const generateContentMock = vi
-      .spyOn(client.models, 'generateContent')
+    const generateContentMock = googleGenAiMock.generateContent
       .mockResolvedValueOnce(createResponse('{"from":"e2","to":"e4"}') as never)
       .mockResolvedValueOnce(
         createResponse('{"from":"e2","to":"e4","promotion":"null"}') as never,
@@ -218,8 +254,7 @@ describe('GoogleActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as GoogleGenAI
-    const generateContentMock = vi.spyOn(client.models, 'generateContent')
+    const generateContentMock = googleGenAiMock.generateContent
 
     for (let attempt = 0; attempt < AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS; attempt += 1) {
       generateContentMock.mockResolvedValueOnce(
@@ -245,9 +280,7 @@ describe('GoogleActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as GoogleGenAI
-    const generateContentMock = vi
-      .spyOn(client.models, 'generateContent')
+    const generateContentMock = googleGenAiMock.generateContent
       .mockResolvedValueOnce(
         createResponse('{"from":"e2","to":"e5","promotion":"null"}') as never,
       )
@@ -305,9 +338,7 @@ describe('GoogleActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as GoogleGenAI
-    const generateContentMock = vi
-      .spyOn(client.models, 'generateContent')
+    const generateContentMock = googleGenAiMock.generateContent
       .mockRejectedValue(
         new ApiError({
           message: 'Unauthorized',
@@ -331,9 +362,7 @@ describe('GoogleActor', () => {
       throw actor
     }
 
-    const client = Reflect.get(actor, 'client') as GoogleGenAI
-    const generateContentMock = vi
-      .spyOn(client.models, 'generateContent')
+    const generateContentMock = googleGenAiMock.generateContent
       .mockResolvedValue(
         createResponse('Here is the JSON', {
           finishReason: 'MAX_TOKENS',
@@ -379,9 +408,7 @@ describe('GoogleActor', () => {
     }
 
     const controller = new AbortController()
-    const client = Reflect.get(actor, 'client') as GoogleGenAI
-    const generateContentMock = vi
-      .spyOn(client.models, 'generateContent')
+    const generateContentMock = googleGenAiMock.generateContent
       .mockResolvedValue(
         createResponse('{"from":"e2","to":"e4","promotion":"null"}') as never,
       )

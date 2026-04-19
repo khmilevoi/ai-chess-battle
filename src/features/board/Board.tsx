@@ -115,6 +115,7 @@ export const Board = reatomMemo(({
               const piece = pieces.get(square)
               const isSelected = selectedSquare === square
               const isTarget = legalTargets.includes(square)
+              const isCapture = isTarget && !!piece
               const isMovable = movableSquares.includes(square)
               const isLastMove = lastMoveSquares.has(square)
               const idx = squareIndex(square)
@@ -139,7 +140,8 @@ export const Board = reatomMemo(({
                     styles.square,
                     squareColor(square),
                     isSelected ? styles.selected : '',
-                    isTarget ? styles.target : '',
+                    isTarget && !isCapture ? styles.target : '',
+                    isCapture ? styles.capture : '',
                     !isSelected && isMovable ? styles.movable : '',
                     isLastMove ? styles.lastMove : '',
                     !interactive ? styles.disabled : '',

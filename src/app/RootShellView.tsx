@@ -7,7 +7,6 @@ import { ThemeToggle } from '@/shared/ui/ThemeToggle'
 import { ToastViewport } from '@/shared/ui/Toast'
 import { CredentialVaultControl } from './CredentialVaultControl'
 import { CredentialVaultDialog } from './CredentialVaultDialog'
-import { openPreferencesDialog, PreferencesDialog } from './PreferencesDialog'
 import { SrAnnouncer } from './SrAnnouncer'
 import { ThemeEffect } from './ThemeEffect'
 import styles from './App.module.css'
@@ -47,14 +46,6 @@ export function RootShellView({
         </div>
         <CredentialVaultControl />
         <ThemeToggle />
-        <Button
-          className={styles.prefsButton}
-          aria-label="Open preferences"
-          title="Preferences"
-          onClick={() => openPreferencesDialog()}
-        >
-          ⚙
-        </Button>
       </div>
       <nav className={styles.nav} aria-label="Primary">
         <Button
@@ -116,7 +107,6 @@ export function RootShellView({
           {routeContent}
         </main>
         <CredentialVaultDialog />
-        <PreferencesDialog />
         <ToastViewport />
       </div>
     </div>

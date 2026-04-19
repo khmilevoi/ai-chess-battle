@@ -20,16 +20,6 @@ export const boardThemeAtom = atom<BoardTheme>('paper', 'board.theme').extend(
   }),
 )
 
-export const boardDragEnabledAtom = atom<boolean>(false, 'board.dragEnabled').extend(
-  withLocalStorage({
-    key: 'ai-chess-battle.board-drag',
-    version: 'board-drag@1',
-    fromSnapshot: (snapshot, state) => {
-      return typeof snapshot === 'boolean' ? snapshot : (state ?? false)
-    },
-  }),
-)
-
 export const boardCoordinatesAtom = atom<boolean>(true, 'board.coordinates').extend(
   withLocalStorage({
     key: 'ai-chess-battle.board-coordinates',

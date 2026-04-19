@@ -130,6 +130,16 @@
   box-shadow: 0 0 0 3px var(--bg-surface);
 }
 
+.capture::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 4px solid var(--board-target-dot);
+  background: transparent;
+  pointer-events: none;
+  z-index: 3;
+}
+
 .lastMove::before {
   inset: 5px;
   border: 4px dashed var(--board-last-move);

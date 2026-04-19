@@ -514,9 +514,13 @@
 }
 
 .historyActionButton {
-  flex: 1 1 96px;
-  min-height: 40px;
-  padding: 8px 10px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 6px;
+  box-shadow: none;
 }
 
 .historyList {

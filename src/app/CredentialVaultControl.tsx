@@ -1,3 +1,4 @@
+import { KeyRound, Lock, LockOpen } from 'lucide-react'
 import { Button } from '@/shared/ui/Button'
 import { vaultStatusAtom } from '@/shared/storage/credentialVault'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
@@ -5,8 +6,13 @@ import {
   credentialVaultNoticeAtom,
   openCredentialVaultDialog,
 } from './credentialVaultDialogState'
-import { KeyIcon } from './KeyIcon'
 import styles from './App.module.css'
+
+function VaultIcon({ status }: { status: 'unconfigured' | 'locked' | 'unlocked' }) {
+  if (status === 'unlocked') return <LockOpen size={16} aria-hidden />
+  if (status === 'locked') return <Lock size={16} aria-hidden />
+  return <KeyRound size={16} aria-hidden />
+}
 
 export const CredentialVaultControl = reatomMemo(() => {
   const vaultStatus = vaultStatusAtom()
@@ -14,10 +20,10 @@ export const CredentialVaultControl = reatomMemo(() => {
 
   const statusLabel =
     vaultStatus === 'unconfigured'
-      ? 'Setup needed'
+      ? 'setup needed'
       : vaultStatus === 'locked'
-        ? 'Locked'
-        : 'Ready'
+        ? 'locked'
+        : 'ready'
   const actionLabel =
     vaultStatus === 'unconfigured'
       ? 'Set up vault'
@@ -26,21 +32,24 @@ export const CredentialVaultControl = reatomMemo(() => {
         : 'Manage vault'
 
   return (
-    <section className={styles.vaultCard} aria-label="Credential vault">
-      <p className={styles.vaultStatus}>{statusLabel}</p>
-      <div className={styles.vaultActions}>
-        <Button
-          className={styles.vaultButton}
-          aria-label={actionLabel}
-          title={actionLabel}
-          onClick={() => {
-            openCredentialVaultDialog()
-          }}
-        >
-          <KeyIcon />
-        </Button>
-      </div>
-      {notice ? <p className={styles.vaultMessage}>{notice}</p> : null}
-    </section>
+    <div className={styles.vaultControl} aria-label="Credential vault">
+      <span
+        className={styles.vaultLabel}
+        data-unconfigured={vaultStatus === 'unconfigured' || undefined}
+      >
+        {statusLabel}
+      </span>
+      <Button
+        className={styles.vaultButton}
+        aria-label={actionLabel}
+        title={actionLabel}
+        onClick={() => {
+          openCredentialVaultDialog()
+        }}
+      >
+        <VaultIcon status={vaultStatus} />
+      </Button>
+      {notice ? <span className={styles.vaultNotice}>{notice}</span> : null}
+    </div>
   )
 }, 'CredentialVaultControl')

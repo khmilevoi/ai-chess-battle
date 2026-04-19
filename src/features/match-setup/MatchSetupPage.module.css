@@ -126,14 +126,12 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: var(--space-5);
-  align-items: start;
 }
 
 .swapColumn {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-top: var(--space-8);
 }
 
 .swapButton {
@@ -145,9 +143,8 @@
 
 .panel {
   display: grid;
-  align-items: flex-start;
+  align-content: start;
   gap: var(--space-5);
-  min-height: 100%;
   padding: var(--space-6);
   border: var(--brutalist-border-strong);
   box-shadow: var(--shadow-default);
