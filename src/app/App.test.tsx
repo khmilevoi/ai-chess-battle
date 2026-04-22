@@ -2,7 +2,10 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { peek, urlAtom } from '@reatom/core'
-import { DEFAULT_ANTHROPIC_MODEL } from '@/actors/ai-actor/anthropic'
+import {
+  DEFAULT_ANTHROPIC_EFFORT,
+  DEFAULT_ANTHROPIC_MODEL,
+} from '@/actors/ai-actor/anthropic'
 import { DEFAULT_GOOGLE_MODEL } from '@/actors/ai-actor/google'
 import {
   DEFAULT_OPENAI_MODEL,
@@ -54,6 +57,7 @@ function createAnthropicSide() {
     actorKey: 'anthropic' as const,
     actorConfig: {
       apiKey: 'anthropic-test',
+      effort: DEFAULT_ANTHROPIC_EFFORT,
       model: DEFAULT_ANTHROPIC_MODEL,
     },
   }

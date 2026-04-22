@@ -22,7 +22,11 @@ import {
   type AiActorRequestArgs,
   type AiActorSharedControls,
 } from '../model'
-import type { AnthropicActorConfig } from './config.schema'
+import {
+  getAnthropicModelOption,
+  normalizeAnthropicEffort,
+  type AnthropicActorConfig,
+} from './config.schema'
 
 type AnthropicSdk = {
   client: AnthropicType
@@ -76,6 +80,8 @@ export class AnthropicActorRuntime extends AiActor {
     signal,
   }: AiActorRequestArgs): Promise<ActorMove | Error> {
     const { client, APIError, zodOutputFormat } = await this.getSdk()
+    const modelOption = getAnthropicModelOption(this.config.model)
+    const effort = normalizeAnthropicEffort(this.config.model, this.config.effort)
 
     const response = await client.messages
       .parse(
@@ -90,8 +96,16 @@ export class AnthropicActorRuntime extends AiActor {
             },
           ],
           output_config: {
+            ...(modelOption.supportedEfforts.length > 0 ? { effort } : {}),
             format: zodOutputFormat(aiActorMoveSchema),
           },
+          ...(modelOption.thinkingMode === 'adaptive'
+            ? {
+                thinking: {
+                  type: 'adaptive' as const,
+                },
+              }
+            : {}),
         },
         { signal },
       )

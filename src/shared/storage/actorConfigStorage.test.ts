@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_ANTHROPIC_MODEL } from '@/actors/ai-actor/anthropic'
+import {
+  DEFAULT_ANTHROPIC_EFFORT,
+  DEFAULT_ANTHROPIC_MODEL,
+} from '@/actors/ai-actor/anthropic'
 import { DEFAULT_GOOGLE_MODEL } from '@/actors/ai-actor/google'
 import { DEFAULT_OPENAI_REASONING_EFFORT } from '@/actors/ai-actor/open-ai'
 import { createDefaultSideConfig } from '@/actors/registry'
@@ -44,6 +47,7 @@ describe('actorConfigStorage', () => {
 
     saveStoredActorConfig('anthropic', {
       apiKey: 'anthropic-key',
+      effort: DEFAULT_ANTHROPIC_EFFORT,
       model: DEFAULT_ANTHROPIC_MODEL,
     })
     saveStoredActorConfig('google', {
@@ -53,6 +57,7 @@ describe('actorConfigStorage', () => {
 
     expect(loadStoredActorConfig('anthropic')).toEqual({
       apiKey: 'anthropic-key',
+      effort: DEFAULT_ANTHROPIC_EFFORT,
       model: DEFAULT_ANTHROPIC_MODEL,
     })
     expect(loadStoredActorConfig('google')).toEqual({
@@ -103,6 +108,30 @@ describe('actorConfigStorage', () => {
       apiKey: '',
       model: 'gpt-5.4-mini',
       reasoningEffort: 'medium',
+    })
+  })
+
+  it('backfills missing Anthropic effort on legacy stored configs', async () => {
+    vi.resetModules()
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        data: {
+          anthropic: {
+            model: DEFAULT_ANTHROPIC_MODEL,
+          },
+        },
+        version: 'actor-configs@1',
+      }),
+    )
+
+    const { loadStoredActorConfig } = await import('./actorConfigStorage')
+    await Promise.resolve()
+
+    expect(loadStoredActorConfig('anthropic')).toEqual({
+      apiKey: '',
+      effort: DEFAULT_ANTHROPIC_EFFORT,
+      model: DEFAULT_ANTHROPIC_MODEL,
     })
   })
 })

@@ -5,7 +5,11 @@ import {
   createAiActorControlsContract,
   type AiActorStoredControls,
 } from '../runtimeControls'
-import { anthropicActorConfigSchema, DEFAULT_ANTHROPIC_MODEL } from './config.schema'
+import {
+  anthropicActorConfigSchema,
+  DEFAULT_ANTHROPIC_EFFORT,
+  DEFAULT_ANTHROPIC_MODEL,
+} from './config.schema'
 import { AnthropicActorControls } from './controls'
 import { AnthropicActorRuntime } from './model'
 import { AnthropicActorMatchInfo, AnthropicActorSettings } from './ui'
@@ -22,6 +26,7 @@ export const AnthropicActor = defineActor({
   secretField: 'apiKey',
   createDefaultConfig: () => ({
     apiKey: '',
+    effort: DEFAULT_ANTHROPIC_EFFORT,
     model: DEFAULT_ANTHROPIC_MODEL,
   }),
   SettingsComponent: AnthropicActorSettings,
@@ -49,6 +54,19 @@ export const AnthropicActor = defineActor({
   },
 })
 
-export { ANTHROPIC_MODEL_OPTIONS, DEFAULT_ANTHROPIC_MODEL } from './config.schema'
-export type { AnthropicActorConfig, AnthropicModelOption } from './config.schema'
+export {
+  ANTHROPIC_EFFORT_OPTIONS,
+  ANTHROPIC_MODEL_OPTIONS,
+  DEFAULT_ANTHROPIC_EFFORT,
+  DEFAULT_ANTHROPIC_MODEL,
+  getAnthropicEffortOptions,
+  getAnthropicModelOption,
+  normalizeAnthropicEffort,
+} from './config.schema'
+export type {
+  AnthropicActorConfig,
+  AnthropicEffort,
+  AnthropicEffortOption,
+  AnthropicModelOption,
+} from './config.schema'
 export { AnthropicActorRuntime } from './model'
