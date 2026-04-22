@@ -14,5 +14,7 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, '**/.worktrees/**'],
     globals: true,
     setupFiles: './src/test/setup.ts',
+    // Keep the jsdom-heavy UI tests stable under Windows load.
+    maxWorkers: 2,
   },
 })

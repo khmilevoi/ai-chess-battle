@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultSideConfig } from '@/actors/registry'
 import { resetVault } from '@/shared/storage/credentialVault'
@@ -41,5 +42,48 @@ describe('MatchSetupPage', () => {
     ).toBe(2)
     expect(screen.getAllByRole('button', { name: 'Set up vault' }).length).toBe(2)
     expect(screen.getByRole('button', { name: 'Start Match' })).toBeDisabled()
+  })
+
+  it('updates Anthropic effort options based on the selected model capabilities', async () => {
+    const user = userEvent.setup()
+    const model = createMatchSetupModel({
+      name: `match-setup-page-anthropic-${crypto.randomUUID()}`,
+      initialConfig: {
+        white: createDefaultSideConfig('anthropic'),
+        black: createDefaultSideConfig('human'),
+      },
+      goToGame: vi.fn(),
+      goToGames: vi.fn(),
+    })
+
+    render(<MatchSetupPage model={model} />)
+
+    const modelSelect = screen.getAllByLabelText('Model')[0] as HTMLSelectElement
+    const sonnetEffortSelect = screen.getByLabelText('Effort') as HTMLSelectElement
+
+    expect(sonnetEffortSelect.value).toBe('medium')
+    expect(
+      within(sonnetEffortSelect).queryByRole('option', { name: 'X-High' }),
+    ).not.toBeInTheDocument()
+
+    await user.selectOptions(modelSelect, 'claude-opus-4-7')
+
+    const opusEffortSelect = screen.getByLabelText('Effort') as HTMLSelectElement
+    expect(within(opusEffortSelect).getByRole('option', { name: 'X-High' })).toBeInTheDocument()
+
+    await user.selectOptions(opusEffortSelect, 'xhigh')
+    expect((screen.getByLabelText('Effort') as HTMLSelectElement).value).toBe('xhigh')
+
+    await user.selectOptions(modelSelect, 'claude-sonnet-4-6')
+
+    const resetEffortSelect = screen.getByLabelText('Effort') as HTMLSelectElement
+    expect(resetEffortSelect.value).toBe('medium')
+    expect(
+      within(resetEffortSelect).queryByRole('option', { name: 'X-High' }),
+    ).not.toBeInTheDocument()
+
+    await user.selectOptions(modelSelect, 'claude-haiku-4-5')
+
+    expect(screen.queryByLabelText('Effort')).not.toBeInTheDocument()
   })
 })

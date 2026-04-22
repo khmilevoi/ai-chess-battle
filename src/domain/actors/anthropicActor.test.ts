@@ -12,6 +12,7 @@ import type { ActorContext } from '../chess/types'
 import {
   AnthropicActor,
   AnthropicActorRuntime,
+  DEFAULT_ANTHROPIC_EFFORT,
   DEFAULT_ANTHROPIC_MODEL,
 } from '@/actors/ai-actor/anthropic'
 import { AI_ACTOR_MAX_OUTPUT_TOKENS } from '@/actors/ai-actor/request'
@@ -142,6 +143,7 @@ function preSeedSdk(actor: AnthropicActorRuntime, apiKey: string): Anthropic {
 describe('AnthropicActor', () => {
   const config = {
     apiKey: 'test-key',
+    effort: DEFAULT_ANTHROPIC_EFFORT,
     model: DEFAULT_ANTHROPIC_MODEL,
   }
 
@@ -468,7 +470,7 @@ describe('AnthropicActor', () => {
     expect(result).toBeInstanceOf(AnthropicHttpError)
   })
 
-  it('passes the abort signal to the SDK request options', async () => {
+  it('passes adaptive thinking, effort, and the abort signal to the SDK request options for Claude Sonnet 4.6', async () => {
     const actor = AnthropicActor.create(config)
 
     if (!(actor instanceof AnthropicActorRuntime)) {
@@ -498,10 +500,103 @@ describe('AnthropicActor', () => {
       expect.objectContaining({
         model: DEFAULT_ANTHROPIC_MODEL,
         max_tokens: AI_ACTOR_MAX_OUTPUT_TOKENS,
+        thinking: {
+          type: 'adaptive',
+        },
+        output_config: expect.objectContaining({
+          effort: DEFAULT_ANTHROPIC_EFFORT,
+          format: expect.anything(),
+        }),
       }),
       {
         signal: controller.signal,
       },
     )
+  })
+
+  it('sends xhigh effort for Claude Opus 4.7 requests', async () => {
+    const actor = AnthropicActor.create({
+      ...config,
+      model: 'claude-opus-4-7',
+      effort: 'xhigh',
+    })
+
+    if (!(actor instanceof AnthropicActorRuntime)) {
+      throw actor
+    }
+
+    const client = preSeedSdk(actor, config.apiKey)
+    const parseMock = vi
+      .spyOn(client.messages, 'parse')
+      .mockResolvedValue(
+        createParsedResponse({
+          from: 'e2',
+          to: 'e4',
+          promotion: 'null',
+        }) as never,
+      )
+
+    const result = await actor.requestMove({
+      context: createActorContext(),
+      signal: new AbortController().signal,
+    })
+
+    expect(result).not.toBeInstanceOf(Error)
+    expect(parseMock).toHaveBeenCalledTimes(1)
+    expect(parseMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        model: 'claude-opus-4-7',
+        thinking: {
+          type: 'adaptive',
+        },
+        output_config: expect.objectContaining({
+          effort: 'xhigh',
+          format: expect.anything(),
+        }),
+      }),
+    )
+  })
+
+  it('omits adaptive thinking and effort for Claude Haiku 4.5 requests', async () => {
+    const actor = AnthropicActor.create({
+      ...config,
+      model: 'claude-haiku-4-5',
+      effort: 'max',
+    })
+
+    if (!(actor instanceof AnthropicActorRuntime)) {
+      throw actor
+    }
+
+    const client = preSeedSdk(actor, config.apiKey)
+    const parseMock = vi
+      .spyOn(client.messages, 'parse')
+      .mockResolvedValue(
+        createParsedResponse({
+          from: 'e2',
+          to: 'e4',
+          promotion: 'null',
+        }) as never,
+      )
+
+    const result = await actor.requestMove({
+      context: createActorContext(),
+      signal: new AbortController().signal,
+    })
+
+    expect(result).not.toBeInstanceOf(Error)
+    expect(parseMock).toHaveBeenCalledTimes(1)
+
+    const params = parseMock.mock.calls[0]?.[0]
+    expect(params).toEqual(
+      expect.objectContaining({
+        model: 'claude-haiku-4-5',
+        output_config: expect.objectContaining({
+          format: expect.anything(),
+        }),
+      }),
+    )
+    expect(params).not.toHaveProperty('thinking')
+    expect(params.output_config).not.toHaveProperty('effort')
   })
 })

@@ -3,6 +3,7 @@ import type { AiActorSharedControls } from './ai-actor'
 import {
   AnthropicActor,
   AnthropicActorRuntime,
+  DEFAULT_ANTHROPIC_EFFORT,
   DEFAULT_ANTHROPIC_MODEL,
 } from './ai-actor/anthropic'
 import {
@@ -87,6 +88,7 @@ describe('actor registry', () => {
       actorKey: 'anthropic',
       actorConfig: {
         apiKey: '',
+        effort: DEFAULT_ANTHROPIC_EFFORT,
         model: DEFAULT_ANTHROPIC_MODEL,
       },
     })
@@ -100,6 +102,7 @@ describe('actor registry', () => {
     expect(HumanActor.configSchema.safeParse(human.actorConfig).success).toBe(true)
     expect(openai.actorConfig.model).toBe(DEFAULT_OPENAI_MODEL)
     expect(openai.actorConfig.reasoningEffort).toBe(DEFAULT_OPENAI_REASONING_EFFORT)
+    expect(anthropic.actorConfig.effort).toBe(DEFAULT_ANTHROPIC_EFFORT)
     expect(anthropic.actorConfig.model).toBe(DEFAULT_ANTHROPIC_MODEL)
     expect(google.actorConfig.model).toBe(DEFAULT_GOOGLE_MODEL)
   })
@@ -159,6 +162,7 @@ describe('actor registry', () => {
   it('creates Anthropic and Gemini runtimes through descriptor contracts', () => {
     const anthropicConfig = {
       apiKey: 'sk-ant',
+      effort: DEFAULT_ANTHROPIC_EFFORT,
       model: DEFAULT_ANTHROPIC_MODEL,
     }
     const googleConfig = {
