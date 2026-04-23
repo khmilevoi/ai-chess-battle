@@ -252,7 +252,7 @@ export const GamePage = reatomMemo(({
   const matchInfoEntries = model.matchInfoEntries()
   const arbiterInfoEntry = model.arbiterInfoEntry()
   const resolvedEvaluation = model.resolvedEvaluation()
-  const arbiterLiveComment = isAtLatestMove ? model.arbiterLiveComment() : null
+  const arbiterLiveComment = model.arbiterLiveComment()
   const hasActorControls = actorPanels.some((actorPanel) => actorPanel.hasControls)
   const controlsNotice = getActorControlsNotice({
     isAtLatestMove: model.isAtLatestMove,
@@ -391,6 +391,10 @@ export const GamePage = reatomMemo(({
             ) : null}
 
             <section className={styles.boardStack}>
+              {arbiterInfoEntry ? (
+                <ArbiterToastLayer comment={arbiterLiveComment} />
+              ) : null}
+
               <section className={styles.boardPanel}>
                 <Board
                   snapshot={snapshot}
@@ -403,13 +407,6 @@ export const GamePage = reatomMemo(({
                   }}
                 />
               </section>
-
-              <ArbiterToastLayer
-                comment={arbiterLiveComment}
-                onDismiss={() => {
-                  model.dismissArbiterLiveComment()
-                }}
-              />
             </section>
           </div>
           {pendingPromotion ? (

@@ -126,16 +126,14 @@ describe('GamePage', () => {
 
     render(<GamePage model={model} />)
 
-    expect(screen.getByRole('heading', { name: 'Actors' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Actors' })).not.toBeNull()
     expect(screen.getAllByText('White').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Black').length).toBeGreaterThan(0)
-    expect(
-      screen.getByText('Confirm before OpenAI request'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Confirm before OpenAI request')).not.toBeNull()
     expect(
       screen.getAllByText(/Move on the board when this side is active\./).length,
     ).toBeGreaterThan(0)
-    expect(screen.queryByRole('heading', { name: 'Position' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Position' })).toBeNull()
   })
 
   it('renders read-only match info for both sides and hides API keys', async () => {
@@ -157,14 +155,12 @@ describe('GamePage', () => {
     }
 
     const panel = within(matchInfoContent)
-    expect(panel.getByText('White')).toBeInTheDocument()
-    expect(panel.getByText('Black')).toBeInTheDocument()
-    expect(panel.getByText('GPT-5.4')).toBeInTheDocument()
-    expect(panel.getByText('High')).toBeInTheDocument()
-    expect(
-      panel.getByText('Black moves are entered directly on the board.'),
-    ).toBeInTheDocument()
-    expect(panel.queryByText('sk-test')).not.toBeInTheDocument()
+    expect(panel.getByText('White')).not.toBeNull()
+    expect(panel.getByText('Black')).not.toBeNull()
+    expect(panel.getByText('GPT-5.4')).not.toBeNull()
+    expect(panel.getByText('High')).not.toBeNull()
+    expect(panel.getByText('Black moves are entered directly on the board.')).not.toBeNull()
+    expect(panel.queryByText('sk-test')).toBeNull()
   })
 
   it('falls back to raw saved model values when they are outside the curated options', async () => {
@@ -192,9 +188,7 @@ describe('GamePage', () => {
       throw new Error('Expected saved setup to be rendered in an aside panel.')
     }
 
-    expect(
-      within(matchInfoContent).getByText('custom-openai-model'),
-    ).toBeInTheDocument()
+    expect(within(matchInfoContent).getByText('custom-openai-model')).not.toBeNull()
   })
 
   it('renders a shared OpenAI control card when both sides use the same actor type', async () => {
@@ -213,8 +207,11 @@ describe('GamePage', () => {
     render(<GamePage model={model} />)
 
     expect(screen.getAllByText('White & Black').length).toBeGreaterThan(0)
-    expect(screen.getByText('White is waiting.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Send OpenAI request' })).toBeEnabled()
+    expect(screen.getByText('White is waiting.')).not.toBeNull()
+    expect(
+      (screen.getByRole('button', { name: 'Send OpenAI request' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false)
   })
 
   it('renders a shared Gemini control card when both sides use the same actor type', async () => {
@@ -233,8 +230,11 @@ describe('GamePage', () => {
     render(<GamePage model={model} />)
 
     expect(screen.getAllByText('White & Black').length).toBeGreaterThan(0)
-    expect(screen.getByText('White is waiting.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Send Gemini request' })).toBeEnabled()
+    expect(screen.getByText('White is waiting.')).not.toBeNull()
+    expect(
+      (screen.getByRole('button', { name: 'Send Gemini request' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false)
   })
 
   it('shows an unavailable state for actor controls while reviewing history', async () => {
@@ -255,9 +255,7 @@ describe('GamePage', () => {
           .length,
       ).toBeGreaterThan(0)
     })
-    expect(
-      screen.queryByText('Confirm before OpenAI request'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Confirm before OpenAI request')).toBeNull()
   })
 
   it('autoscrolls only the move list when a new move is added on the live tail', async () => {
@@ -345,18 +343,14 @@ describe('GamePage', () => {
 
     expect(moveNumbers).toContain('10')
     expect(moveNumbers).toContain('11')
-    expect(
-      screen.getByRole('button', { name: '10c7 to c5c7c5' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: '11c2 to c4c2c4' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '10c7 to c5c7c5' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: '11c2 to c4c2c4' })).not.toBeNull()
     expect(
       screen.getByText('c7c5', { selector: `.${styles.historyMoveSecondary}` }),
-    ).toBeInTheDocument()
+    ).not.toBeNull()
     expect(
       screen.getByText('c2c4', { selector: `.${styles.historyMoveSecondary}` }),
-    ).toBeInTheDocument()
+    ).not.toBeNull()
   })
 
   it('renders the eval bar only when an arbiter is configured and walks back through prior evaluations', async () => {
@@ -387,19 +381,19 @@ describe('GamePage', () => {
 
     render(<GamePage model={model} />)
 
-    expect(screen.getByLabelText('Evaluation bar')).toBeInTheDocument()
-    expect(screen.getByText('-0.2')).toBeInTheDocument()
+    expect(screen.getByLabelText('Evaluation bar')).not.toBeNull()
+    expect(screen.getByText('-0.2')).not.toBeNull()
 
     model.goToMove(2)
 
     await waitFor(() => {
-      expect(screen.getByText('+0.5')).toBeInTheDocument()
+      expect(screen.getByText('+0.5')).not.toBeNull()
     })
 
     model.goToMove(0)
 
     await waitFor(() => {
-      expect(screen.getByText('--')).toBeInTheDocument()
+      expect(screen.getByText('--')).not.toBeNull()
     })
   })
 
@@ -412,12 +406,14 @@ describe('GamePage', () => {
       moves: ['e2e4'],
     })
 
-    render(<GamePage model={model} />)
+    const { container } = render(<GamePage model={model} />)
+    const boardStack = container.querySelector(`.${styles.boardStack}`)
 
-    expect(screen.queryByLabelText('Evaluation bar')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Evaluation bar')).toBeNull()
+    expect(boardStack?.querySelector('[role="status"]')).toBeNull()
   })
 
-  it('renders the live arbiter toast on the board and hides it while reviewing history', async () => {
+  it('keeps the arbiter ticker visible whenever an arbiter is configured', async () => {
     let resolveEvaluation: ((value: { score: number; comment: string }) => void) | null = null
     vi.spyOn(openAiProvider, 'callOpenAi').mockImplementation(
       () =>
@@ -439,7 +435,18 @@ describe('GamePage', () => {
       },
     })
 
-    render(<GamePage model={model} />)
+    const { container } = render(<GamePage model={model} />)
+    const boardStack = container.querySelector(`.${styles.boardStack}`)
+    const boardPanel = container.querySelector(`.${styles.boardPanel}`)
+
+    if (!boardStack || !boardPanel) {
+      throw new Error('Expected the board stack and board panel to render.')
+    }
+
+    const initialTicker = within(boardStack).getByRole('status')
+    expect(initialTicker.textContent).toContain('Arbiter online. Awaiting the next move.')
+    expect(boardStack.firstElementChild).toBe(initialTicker)
+    expect(initialTicker.nextElementSibling).toBe(boardPanel)
 
     model.clickSquare('e2')
     model.clickSquare('e4')
@@ -460,13 +467,19 @@ describe('GamePage', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('White opens with purpose.')).toBeInTheDocument()
+      const ticker = within(boardStack).getByRole('status')
+      expect(ticker.textContent).toContain('White opens with purpose.')
+      expect(boardStack.firstElementChild).toBe(ticker)
+      expect(ticker.nextElementSibling).toBe(boardPanel)
     })
 
     model.goToMove(0)
 
     await waitFor(() => {
-      expect(screen.queryByText('White opens with purpose.')).not.toBeInTheDocument()
+      const ticker = within(boardStack).getByRole('status')
+      expect(ticker.textContent).toContain('White opens with purpose.')
+      expect(boardStack.firstElementChild).toBe(ticker)
+      expect(ticker.nextElementSibling).toBe(boardPanel)
     })
   })
 })

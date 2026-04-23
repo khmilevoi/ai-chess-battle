@@ -1,81 +1,139 @@
-.layer {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  pointer-events: none;
-  z-index: var(--z-toast);
-}
-
 .toast {
-  pointer-events: auto;
+  --ticker-accent: color-mix(in srgb, var(--bg-surface-strong) 70%, transparent);
+  --ticker-gap: clamp(2rem, 3vw, 3.5rem);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2);
-  max-width: min(320px, calc(100% - var(--space-4) * 2));
-  margin: var(--space-3);
-  padding: var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
   border: var(--brutalist-border);
-  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  background:
+    linear-gradient(90deg, var(--ticker-accent) 0 14px, transparent 14px),
+    color-mix(in srgb, var(--bg-surface) 96%, transparent);
   box-shadow: var(--shadow-panel);
   backdrop-filter: blur(8px);
 }
 
+.idle {
+  --ticker-accent: color-mix(in srgb, var(--border-muted) 65%, transparent);
+}
+
 .whiteMove {
-  align-self: end;
-  justify-self: end;
+  --ticker-accent: color-mix(in srgb, var(--feedback-warning-bg) 55%, transparent);
 }
 
 .blackMove {
-  align-self: start;
-  justify-self: start;
-}
-
-.body {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
+  --ticker-accent: color-mix(in srgb, var(--bg-inverse) 18%, transparent);
 }
 
 .label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
   margin: 0;
+  padding: 4px 10px;
+  border: 2px solid var(--border-default);
   font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.blackMove .label {
+  background: var(--bg-inverse);
+  color: var(--text-inverse);
+  border-color: var(--bg-inverse);
+}
+
+.viewport {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  gap: var(--ticker-gap);
+  width: max-content;
+  animation: arbiter-ticker 16s linear infinite;
+  will-change: transform;
 }
 
 .text {
+  flex: 0 0 auto;
   margin: 0;
   font-size: 0.9rem;
   font-weight: 700;
   line-height: 1.4;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
-.closeButton {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 2px solid var(--border-default);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
+.duplicateText {
+  opacity: 0.82;
 }
 
-.closeButton:hover {
-  background: var(--bg-surface-strong);
+.toast:hover .track,
+.toast:focus-within .track {
+  animation-play-state: paused;
 }
 
-.closeButton:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 3px;
+.reducedMotion .track {
+  display: block;
+  width: 100%;
+  animation: none;
+  transform: none;
+}
+
+.reducedMotion .text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reducedMotion .duplicateText {
+  display: none;
+}
+
+@keyframes arbiter-ticker {
+
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc(-50% - (var(--ticker-gap) / 2)));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track {
+    display: block;
+    width: 100%;
+    animation: none;
+    transform: none;
+  }
+
+  .text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .duplicateText {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
   .toast {
-    max-width: calc(100% - var(--space-3) * 2);
-    margin: var(--space-2);
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .label {
+    min-height: 26px;
+    padding: 4px 8px;
   }
 }
