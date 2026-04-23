@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { peek } from '@reatom/core'
 import { createDefaultMatchConfig } from '@/actors/registry'
+import { normalizeStoredMatchConfigSnapshotValue } from './helpers'
 import { loadStoredMatchConfig, storedMatchConfig } from './matchConfigStorage'
 
 const STORAGE_KEY = 'ai-chess-battle.match-config'
@@ -23,6 +24,30 @@ describe('matchConfigStorage', () => {
 
     expect(peek(storedMatchConfig)).not.toBeNull()
     expect(loadStoredMatchConfig()).toEqual(config)
+  })
+
+  it('round-trips arbiter config through storage', () => {
+    storedMatchConfig.save({
+      white: createDefaultMatchConfig().white,
+      black: createDefaultMatchConfig().black,
+      arbiter: {
+        arbiterKey: 'openai',
+        arbiterConfig: {
+          model: 'gpt-5-nano',
+        },
+      },
+    })
+
+    expect(loadStoredMatchConfig()).toEqual({
+      white: createDefaultMatchConfig().white,
+      black: createDefaultMatchConfig().black,
+      arbiter: {
+        arbiterKey: 'openai',
+        arbiterConfig: {
+          model: 'gpt-5-nano',
+        },
+      },
+    })
   })
 
   it('does not persist provider api keys in plaintext', () => {
@@ -85,6 +110,20 @@ describe('matchConfigStorage', () => {
         },
       },
       black: { actorKey: 'human', actorConfig: {} },
+      arbiter: null,
+    })
+  })
+
+  it('treats missing legacy arbiter config as null', () => {
+    expect(
+      normalizeStoredMatchConfigSnapshotValue({
+        white: { actorKey: 'human', actorConfig: {} },
+        black: { actorKey: 'human', actorConfig: {} },
+      }),
+    ).toEqual({
+      white: { actorKey: 'human', actorConfig: {} },
+      black: { actorKey: 'human', actorConfig: {} },
+      arbiter: null,
     })
   })
 

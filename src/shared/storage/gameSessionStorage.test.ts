@@ -136,6 +136,45 @@ describe('gameSessionStorage', () => {
     )
   })
 
+  it('persists arbiter evaluations without advancing updatedAt when explicitly preserved', () => {
+    const game = createRequiredStoredGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+        arbiter: {
+          arbiterKey: 'openai',
+          arbiterConfig: {
+            model: 'gpt-5-nano',
+          },
+        },
+      },
+      moves: ['e2e4'],
+    })
+
+    const updated = updateStoredGameRecord({
+      gameId: game.id,
+      evaluations: [
+        {
+          score: 32,
+          comment: 'White starts with a clean claim to the center.',
+        },
+      ],
+      updatedAt: game.updatedAt,
+    })
+
+    expect(updated).toEqual(
+      expect.objectContaining({
+        updatedAt: game.updatedAt,
+        evaluations: [
+          {
+            score: 32,
+            comment: 'White starts with a clean claim to the center.',
+          },
+        ],
+      }),
+    )
+  })
+
   it('replays and summarizes a saved game record', () => {
     const game = createRequiredStoredGame({
       config: {
@@ -336,6 +375,54 @@ describe('gameSessionStorage', () => {
     } as never)
 
     expect(saved?.actorControls).toEqual({})
+  })
+
+  it('normalizes malformed evaluation entries to null while preserving array length', async () => {
+    vi.resetModules()
+    window.localStorage.setItem(
+      GAMES_STORAGE_KEY,
+      JSON.stringify({
+        data: {
+          version: 1,
+          activeGameId: null,
+          games: [
+            {
+              id: 'arbiter-record',
+              version: 1,
+              config: {
+                white: createDefaultSideConfig('human'),
+                black: createDefaultSideConfig('human'),
+                arbiter: {
+                  arbiterKey: 'openai',
+                  arbiterConfig: {
+                    model: 'gpt-5-nano',
+                  },
+                },
+              },
+              actorControls: {},
+              moves: ['e2e4', 'e7e5'],
+              evaluations: [
+                { score: 23, comment: 'Playable edge.' },
+                { score: 'bad', comment: 12 },
+                null,
+              ],
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          ],
+        },
+        version: 'games@2',
+      }),
+    )
+    const module = await import('./gameSessionStorage')
+
+    module.ensureStoredGameArchiveInitialized()
+
+    expect(peek(module.storedGamesAtom)[0]?.evaluations).toEqual([
+      { score: 23, comment: 'Playable edge.' },
+      null,
+      null,
+    ])
   })
 
   it('does not persist provider api keys in saved game archives', () => {

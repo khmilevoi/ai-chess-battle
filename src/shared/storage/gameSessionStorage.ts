@@ -1,5 +1,6 @@
 import { atom, computed, peek, withLocalStorage } from '@reatom/core'
 import { type MatchConfig } from '@/actors/registry'
+import type { Eval } from '@/arbiter/types'
 import { createChessEngine } from '@/domain/chess/createChessEngine'
 import {
   isTerminalStatus,
@@ -40,6 +41,7 @@ type StoredGameRecordSnapshot = {
   config: StoredMatchConfig
   actorControls: StoredGameActorControls
   moves: Array<UciMove>
+  evaluations?: Array<Eval | null>
   state: StoredGameStateSnapshot
   createdAt: number
   updatedAt: number
@@ -57,6 +59,7 @@ export type StoredGameRecord = {
   config: MatchConfig
   actorControls: StoredGameActorControls
   moves: Array<UciMove>
+  evaluations?: Array<Eval | null>
   state: StoredGameStateSnapshot
   createdAt: number
   updatedAt: number
@@ -117,6 +120,49 @@ function normalizeStoredGameActorControls(value: unknown): StoredGameActorContro
   const record = value as Record<string, unknown>
 
   return { ...record }
+}
+
+function normalizeStoredEvaluationValue(value: unknown): Eval | null {
+  if (value === null) {
+    return null
+  }
+
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null
+  }
+
+  const record = value as Record<string, unknown>
+
+  if (
+    typeof record.score !== 'number' ||
+    !Number.isInteger(record.score) ||
+    record.score < -1000 ||
+    record.score > 1000 ||
+    typeof record.comment !== 'string' ||
+    record.comment.length === 0 ||
+    record.comment.length > 240
+  ) {
+    return null
+  }
+
+  return {
+    score: record.score,
+    comment: record.comment,
+  }
+}
+
+function normalizeStoredEvaluationsValue(
+  value: unknown,
+): Array<Eval | null> | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+
+  return value.map((entry) => normalizeStoredEvaluationValue(entry))
 }
 
 function isStoredGameSide(value: unknown): value is BoardSnapshot['turn'] {
@@ -314,6 +360,7 @@ function normalizeStoredGameRecordSnapshotValue(
     config,
     actorControls: normalizeStoredGameActorControls(record.actorControls),
     moves,
+    evaluations: normalizeStoredEvaluationsValue(record.evaluations),
     state,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -732,15 +779,18 @@ export function createStoredGameRecord({
   config,
   actorControls = {},
   moves = [],
+  evaluations,
 }: {
   config: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
+  evaluations?: Array<Eval | null>
 }): StoredGameRecord | StorageError {
   const snapshot = createStoredGameRecordSnapshot({
     config,
     actorControls,
     moves,
+    evaluations,
   })
 
   if (snapshot instanceof Error) {
@@ -754,10 +804,12 @@ function createStoredGameRecordSnapshot({
   config,
   actorControls = {},
   moves = [],
+  evaluations,
 }: {
   config: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
+  evaluations?: Array<Eval | null>
 }): StoredGameRecordSnapshot | StorageError {
   const now = Date.now()
   const state = createStoredGameStateSnapshotFromMoves(moves)
@@ -772,6 +824,7 @@ function createStoredGameRecordSnapshot({
     config: redactMatchConfig(config),
     actorControls,
     moves,
+    evaluations,
     state,
     createdAt: now,
     updatedAt: now,
@@ -782,15 +835,17 @@ export function createStoredGame({
   config,
   actorControls = {},
   moves = [],
+  evaluations,
   makeActive = false,
 }: {
   config: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
+  evaluations?: Array<Eval | null>
   makeActive?: boolean
 }): StoredGameRecord | StorageError {
   ensureStoredGameArchiveInitialized()
-  const record = createStoredGameRecord({ config, actorControls, moves })
+  const record = createStoredGameRecord({ config, actorControls, moves, evaluations })
 
   if (record instanceof Error) {
     return record
@@ -856,6 +911,7 @@ export function updateStoredGameRecord({
   config,
   actorControls,
   moves,
+  evaluations,
   snapshot,
   updatedAt = Date.now(),
 }: {
@@ -863,6 +919,7 @@ export function updateStoredGameRecord({
   config?: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<UciMove>
+  evaluations?: Array<Eval | null>
   snapshot?: BoardSnapshot
   updatedAt?: number
 }): StoredGameRecord | null {
@@ -878,6 +935,7 @@ export function updateStoredGameRecord({
     config: config === undefined ? currentRecord.config : redactMatchConfig(config),
     actorControls: actorControls ?? currentRecord.actorControls,
     moves: moves ?? currentRecord.moves,
+    evaluations: evaluations ?? currentRecord.evaluations,
     state:
       snapshot === undefined
         ? moves === undefined

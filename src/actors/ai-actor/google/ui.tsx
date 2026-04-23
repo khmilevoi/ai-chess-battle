@@ -1,5 +1,5 @@
 import type { ActorMatchInfoProps, ActorSettingsProps } from '../../types'
-import { AiProviderSettings, getOptionLabel } from '../providerSettings'
+import { AiProviderSettings, getOptionLabel } from '@/shared/ai-providers/ui/AiProviderSettings'
 import { GOOGLE_MODEL_OPTIONS, type GoogleActorConfig } from './config.schema'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
 

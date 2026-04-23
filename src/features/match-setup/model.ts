@@ -1,4 +1,12 @@
 import { action, atom, computed, peek } from '@reatom/core'
+import {
+  createDefaultArbiterConfig,
+  getRegisteredArbiter,
+  listRegisteredArbiters,
+  validateArbiterSideConfig,
+  type ArbiterProviderKey,
+} from '@/arbiter/registry'
+import type { ArbiterSideConfig } from '@/arbiter/types'
 import { ActorError } from '@/shared/errors'
 import {
   createDefaultSideConfig,
@@ -12,6 +20,10 @@ import {
 import type { Side } from '@/domain/chess/types'
 import { storedMatchConfig } from '@/shared/storage/matchConfigStorage'
 import {
+  readStoredArbiterConfig,
+  saveStoredArbiterConfig,
+} from '@/shared/storage/arbiterConfigStorage'
+import {
   readStoredActorConfig,
   saveStoredActorConfig,
 } from '@/shared/storage/actorConfigStorage'
@@ -23,6 +35,7 @@ import {
 import {
   redactSideConfig,
   resolveStoredSideConfig,
+  type StoredArbiterSideConfig,
   type StoredSideConfig,
 } from '@/shared/storage/helpers'
 
@@ -54,6 +67,33 @@ function syncSharedActorConfig<K extends ActorKey>(
   saveStoredActorConfig(sideConfig.actorKey, sideConfig.actorConfig)
 }
 
+function hydrateSharedArbiterConfig(
+  arbiterConfig: ArbiterSideConfig | null | undefined,
+): StoredArbiterSideConfig | null {
+  if (arbiterConfig === null || arbiterConfig === undefined) {
+    return null
+  }
+
+  const storedConfig = readStoredArbiterConfig(arbiterConfig.arbiterKey)
+
+  if (storedConfig === null) {
+    return arbiterConfig
+  }
+
+  return {
+    arbiterKey: arbiterConfig.arbiterKey,
+    arbiterConfig: storedConfig,
+  } satisfies StoredArbiterSideConfig
+}
+
+function syncSharedArbiterConfig(sideConfig: ArbiterSideConfig | null): void {
+  if (sideConfig === null) {
+    return
+  }
+
+  saveStoredArbiterConfig(sideConfig.arbiterKey, sideConfig.arbiterConfig as never)
+}
+
 export function createMatchSetupModel({
   name,
   initialConfig,
@@ -68,6 +108,10 @@ export function createMatchSetupModel({
     hydrateSharedActorConfig(initialConfig.black),
     `${name}.blackState`,
   )
+  const arbiterSideConfigState = atom<StoredArbiterSideConfig | null>(
+    hydrateSharedArbiterConfig(initialConfig.arbiter),
+    `${name}.arbiterState`,
+  )
   const setupError = atom<Error | null>(null, `${name}.setupError`)
   const whiteSideConfig = computed(
     () => resolveStoredSideConfig(whiteSideConfigState(), vaultSecretsAtom()),
@@ -76,6 +120,10 @@ export function createMatchSetupModel({
   const blackSideConfig = computed(
     () => resolveStoredSideConfig(blackSideConfigState(), vaultSecretsAtom()),
     `${name}.black`,
+  )
+  const arbiterSideConfig = computed(
+    () => arbiterSideConfigState(),
+    `${name}.arbiter`,
   )
 
   const whiteValidation = computed(
@@ -86,17 +134,44 @@ export function createMatchSetupModel({
     () => validateSideConfig('black', blackSideConfig()),
     `${name}.blackValidation`,
   )
+  const arbiterValidation = computed(() => {
+    const currentArbiter = arbiterSideConfig()
+    const validation = validateArbiterSideConfig(currentArbiter)
+
+    if (currentArbiter === null) {
+      return validation
+    }
+
+    const descriptor = getRegisteredArbiter(currentArbiter.arbiterKey)
+    const hasSecret =
+      (vaultSecretsAtom()[currentArbiter.arbiterKey] ?? '').length > 0
+
+    if (!hasSecret) {
+      return {
+        config: null,
+        error: new Error(`Enter an API key for ${descriptor.displayName} in the vault.`),
+        fieldErrors: {
+          ...validation.fieldErrors,
+          apiKey: ['API key is required'],
+        },
+      }
+    }
+
+    return validation
+  }, `${name}.arbiterValidation`)
   const readyConfig = computed(() => {
     const white = whiteValidation()
     const black = blackValidation()
+    const arbiter = arbiterValidation()
 
-    if (!white.config || !black.config) {
+    if (!white.config || !black.config || arbiter.error) {
       return null
     }
 
     return {
       white: white.config,
       black: black.config,
+      arbiter: arbiter.config,
     } satisfies MatchConfig
   }, `${name}.readyConfig`)
   const canStart = computed(() => readyConfig() !== null, `${name}.canStart`)
@@ -108,6 +183,12 @@ export function createMatchSetupModel({
     () => getRegisteredActor(blackSideConfig().actorKey),
     `${name}.blackActorDefinition`,
   )
+  const arbiterDefinition = computed(() => {
+    const currentArbiter = arbiterSideConfig()
+    return currentArbiter === null
+      ? null
+      : getRegisteredArbiter(currentArbiter.arbiterKey)
+  }, `${name}.arbiterDefinition`)
   const activeGameSummary = computed(
     () => activeStoredGameSummaryAtom(),
     `${name}.activeGameSummary`,
@@ -161,11 +242,37 @@ export function createMatchSetupModel({
     `${name}.updateSideConfig`,
   )
 
+  const setArbiterProvider = action((arbiterKey: ArbiterProviderKey | null) => {
+    if (arbiterKey === null) {
+      arbiterSideConfigState.set(null)
+      return null
+    }
+
+    const storedConfig = readStoredArbiterConfig(arbiterKey)
+    arbiterSideConfigState.set(
+      storedConfig === null
+        ? createDefaultArbiterConfig(arbiterKey)
+        : {
+            arbiterKey,
+            arbiterConfig: storedConfig,
+          },
+    )
+
+    return null
+  }, `${name}.setArbiterProvider`)
+
+  const updateArbiterConfig = action((nextConfig: ArbiterSideConfig | null) => {
+    syncSharedArbiterConfig(nextConfig)
+    arbiterSideConfigState.set(nextConfig)
+    return nextConfig
+  }, `${name}.updateArbiterConfig`)
+
   const startMatch = action(async () => {
     setupError.set(null)
 
     const white = whiteValidation()
     const black = blackValidation()
+    const arbiter = arbiterValidation()
 
     if (white.error) {
       setupError.set(white.error)
@@ -175,6 +282,11 @@ export function createMatchSetupModel({
     if (black.error) {
       setupError.set(black.error)
       return black.error
+    }
+
+    if (arbiter.error) {
+      setupError.set(arbiter.error)
+      return arbiter.error
     }
 
     const matchConfig = readyConfig()
@@ -191,6 +303,7 @@ export function createMatchSetupModel({
 
     syncSharedActorConfig(matchConfig.white)
     syncSharedActorConfig(matchConfig.black)
+    syncSharedArbiterConfig(matchConfig.arbiter ?? null)
 
     const game = createStoredGame({
       config: matchConfig,
@@ -242,18 +355,24 @@ export function createMatchSetupModel({
 
   return {
     availableActors: listRegisteredActors(),
+    availableArbiters: listRegisteredArbiters(),
     activeGameSummary,
     whiteSideConfig,
     blackSideConfig,
+    arbiterSideConfig,
     whiteValidation,
     blackValidation,
+    arbiterValidation,
     whiteActorDefinition,
     blackActorDefinition,
+    arbiterDefinition,
     readyConfig,
     canStart,
     setupError,
     setSideActor,
     updateSideConfig,
+    setArbiterProvider,
+    updateArbiterConfig,
     startMatch,
     resumeActiveMatch,
     openGames,

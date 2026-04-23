@@ -1,5 +1,5 @@
 import type { ActorMatchInfoProps, ActorSettingsProps } from '../../types'
-import { AiProviderSettings, getOptionLabel } from '../providerSettings'
+import { AiProviderSettings, getOptionLabel } from '@/shared/ai-providers/ui/AiProviderSettings'
 import {
   ANTHROPIC_EFFORT_OPTIONS,
   ANTHROPIC_MODEL_OPTIONS,

@@ -1,4 +1,35 @@
 import * as errore from 'errore'
+import {
+  AnthropicHttpError,
+  AnthropicResponseError,
+  AnthropicTransportError,
+} from '@/shared/ai-providers/anthropic'
+import {
+  GoogleGenAiHttpError,
+  GoogleGenAiResponseError,
+  GoogleGenAiTransportError,
+} from '@/shared/ai-providers/google'
+import {
+  OpenAiHttpError,
+  OpenAiResponseError,
+  OpenAiTransportError,
+} from '@/shared/ai-providers/openai'
+
+export {
+  OpenAiHttpError,
+  OpenAiResponseError,
+  OpenAiTransportError,
+} from '@/shared/ai-providers/openai'
+export {
+  AnthropicHttpError,
+  AnthropicResponseError,
+  AnthropicTransportError,
+} from '@/shared/ai-providers/anthropic'
+export {
+  GoogleGenAiHttpError,
+  GoogleGenAiResponseError,
+  GoogleGenAiTransportError,
+} from '@/shared/ai-providers/google'
 
 class EngineDomainError extends Error {}
 class ActorDomainError extends Error {}
@@ -22,60 +53,6 @@ export class ActorError extends errore.createTaggedError({
 export class ActorConfigError extends errore.createTaggedError({
   name: 'ActorConfigError',
   message: 'Invalid $side actor config for $actorKey',
-  extends: ActorDomainError,
-}) {}
-
-export class OpenAiTransportError extends errore.createTaggedError({
-  name: 'OpenAiTransportError',
-  message: 'OpenAI request failed during $operation',
-  extends: ActorDomainError,
-}) {}
-
-export class OpenAiHttpError extends errore.createTaggedError({
-  name: 'OpenAiHttpError',
-  message: 'OpenAI responded with HTTP $status',
-  extends: ActorDomainError,
-}) {}
-
-export class OpenAiResponseError extends errore.createTaggedError({
-  name: 'OpenAiResponseError',
-  message: 'OpenAI returned an invalid move payload',
-  extends: ActorDomainError,
-}) {}
-
-export class AnthropicTransportError extends errore.createTaggedError({
-  name: 'AnthropicTransportError',
-  message: 'Anthropic request failed during $operation',
-  extends: ActorDomainError,
-}) {}
-
-export class AnthropicHttpError extends errore.createTaggedError({
-  name: 'AnthropicHttpError',
-  message: 'Anthropic responded with HTTP $status',
-  extends: ActorDomainError,
-}) {}
-
-export class AnthropicResponseError extends errore.createTaggedError({
-  name: 'AnthropicResponseError',
-  message: 'Anthropic returned an invalid move payload',
-  extends: ActorDomainError,
-}) {}
-
-export class GoogleGenAiTransportError extends errore.createTaggedError({
-  name: 'GoogleGenAiTransportError',
-  message: 'Gemini request failed during $operation',
-  extends: ActorDomainError,
-}) {}
-
-export class GoogleGenAiHttpError extends errore.createTaggedError({
-  name: 'GoogleGenAiHttpError',
-  message: 'Gemini responded with HTTP $status',
-  extends: ActorDomainError,
-}) {}
-
-export class GoogleGenAiResponseError extends errore.createTaggedError({
-  name: 'GoogleGenAiResponseError',
-  message: 'Gemini returned an invalid move payload',
   extends: ActorDomainError,
 }) {}
 

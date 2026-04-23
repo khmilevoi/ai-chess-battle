@@ -1,13 +1,10 @@
 import { named } from '@reatom/core'
-import type OpenAIType from 'openai'
-import type { APIError as APIErrorType } from 'openai'
 import {
   IllegalMoveError,
-  OpenAiHttpError,
   OpenAiResponseError,
-  OpenAiTransportError,
   type ActorRequestError,
 } from '@/shared/errors'
+import { callOpenAi } from '@/shared/ai-providers/openai'
 import { type ActorMove } from '@/domain/chess/types'
 import {
   AiActor,
@@ -15,21 +12,15 @@ import {
   type AiActorSharedControls,
 } from '../model'
 import {
-  AI_ACTOR_MOVE_JSON_SCHEMA,
   buildAiActorInstructions,
   buildAiActorPrompt,
-  parseAiActorMoveJson,
+  aiActorMoveSchema,
+  validateAiActorMove,
 } from '../request'
 import type { OpenAiActorConfig } from './config.schema'
 
-type OpenAiSdk = {
-  client: OpenAIType
-  APIError: typeof APIErrorType
-}
-
 export class OpenAiActorRuntime extends AiActor {
   private readonly config: OpenAiActorConfig
-  private sdkCache: OpenAiSdk | null = null
 
   constructor(
     config: OpenAiActorConfig,
@@ -44,21 +35,6 @@ export class OpenAiActorRuntime extends AiActor {
     this.config = config
   }
 
-  private async getSdk(): Promise<OpenAiSdk> {
-    if (!this.sdkCache) {
-      const { default: OpenAI, APIError } = await import('openai')
-      this.sdkCache = {
-        client: new OpenAI({
-          apiKey: this.config.apiKey,
-          baseURL: 'https://api.openai.com/v1',
-          dangerouslyAllowBrowser: true,
-        }),
-        APIError,
-      }
-    }
-    return this.sdkCache
-  }
-
   protected isRetryableError(error: ActorRequestError) {
     return error instanceof OpenAiResponseError || error instanceof IllegalMoveError
   }
@@ -68,58 +44,24 @@ export class OpenAiActorRuntime extends AiActor {
     errorStack,
     signal,
   }: AiActorRequestArgs): Promise<ActorMove | Error> {
-    const { client, APIError } = await this.getSdk()
+    const parsed = await callOpenAi({
+      apiKey: this.config.apiKey,
+      model: this.config.model,
+      system: buildAiActorInstructions(),
+      user: buildAiActorPrompt({ context, errorStack }),
+      schema: aiActorMoveSchema,
+      signal,
+      providerOptions: {
+        reasoningEffort: this.config.reasoningEffort,
+      },
+    }).catch((cause) => cause as Error)
 
-    const response = await client.responses
-      .create(
-        {
-          model: this.config.model,
-          store: false,
-          reasoning: { effort: this.config.reasoningEffort },
-          instructions: buildAiActorInstructions(),
-          input: buildAiActorPrompt({ context, errorStack }),
-          text: {
-            format: {
-              type: 'json_schema',
-              name: 'chess_move',
-              strict: true,
-              schema: AI_ACTOR_MOVE_JSON_SCHEMA,
-            },
-          },
-        },
-        { signal },
-      )
-      .catch((cause) => cause as Error)
-
-    if (response instanceof APIError && response.status !== undefined) {
-      return new OpenAiHttpError({
-        status: response.status,
-        cause: response,
-      })
+    if (parsed instanceof Error) {
+      return parsed
     }
 
-    if (response instanceof Error) {
-      return new OpenAiTransportError({
-        operation: 'request',
-        cause: response,
-      })
-    }
-
-    if (response.error) {
-      return new OpenAiTransportError({
-        operation: 'error-body',
-        cause: response.error,
-      })
-    }
-
-    if (response.output_text.length === 0) {
-      return new OpenAiResponseError({
-        cause: new Error('OpenAI response did not contain output text.'),
-      })
-    }
-
-    return parseAiActorMoveJson({
-      text: response.output_text,
+    return validateAiActorMove({
+      parsed,
       legalMovesBySquare: context.legalMovesBySquare,
       createResponseError: (cause) => new OpenAiResponseError({ cause }),
     })

@@ -7,10 +7,12 @@ import {
 } from '@/actors/ai-actor/open-ai'
 import { createDefaultSideConfig } from '@/actors/registry'
 import type { MatchConfig } from '@/actors/registry'
+import * as openAiProvider from '@/shared/ai-providers/openai'
 import {
   clearStoredGameArchive,
   createStoredGame,
   setActiveGameId,
+  type StoredGameRecord,
   type StoredGameActorControls,
 } from '@/shared/storage/gameSessionStorage'
 import { setupTestVault } from '@/test/credentialVault'
@@ -34,12 +36,14 @@ function createSavedGame({
   config,
   actorControls = {},
   moves = [],
+  evaluations,
 }: {
   config: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<string>
+  evaluations?: StoredGameRecord['evaluations']
 }) {
-  const game = createRequiredStoredGame({ config, actorControls, moves })
+  const game = createRequiredStoredGame({ config, actorControls, moves, evaluations })
   setActiveGameId(game.id)
   return game
 }
@@ -69,12 +73,14 @@ async function createStartedModel({
   config,
   actorControls = {},
   moves = [],
+  evaluations,
 }: {
   config: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<string>
+  evaluations?: StoredGameRecord['evaluations']
 }) {
-  const game = createSavedGame({ config, actorControls, moves })
+  const game = createSavedGame({ config, actorControls, moves, evaluations })
   const model = createGameModel({
     name: `game-page-test-${crypto.randomUUID()}`,
     gameId: game.id,
@@ -103,6 +109,7 @@ describe('GamePage', () => {
   ]
 
   beforeEach(async () => {
+    openAiProvider.resetOpenAiSdkCache()
     clearStoredGameArchive()
     window.localStorage.clear()
     await setupTestVault()
@@ -350,5 +357,116 @@ describe('GamePage', () => {
     expect(
       screen.getByText('c2c4', { selector: `.${styles.historyMoveSecondary}` }),
     ).toBeInTheDocument()
+  })
+
+  it('renders the eval bar only when an arbiter is configured and walks back through prior evaluations', async () => {
+    const model = await createStartedModel({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+        arbiter: {
+          arbiterKey: 'openai',
+          arbiterConfig: {
+            model: 'gpt-5-nano',
+          },
+        },
+      },
+      moves: ['e2e4', 'e7e5', 'g1f3'],
+      evaluations: [
+        {
+          score: 50,
+          comment: 'White has the easier game.',
+        },
+        null,
+        {
+          score: -20,
+          comment: 'Black has enough counterplay.',
+        },
+      ],
+    })
+
+    render(<GamePage model={model} />)
+
+    expect(screen.getByLabelText('Evaluation bar')).toBeInTheDocument()
+    expect(screen.getByText('-0.2')).toBeInTheDocument()
+
+    model.goToMove(2)
+
+    await waitFor(() => {
+      expect(screen.getByText('+0.5')).toBeInTheDocument()
+    })
+
+    model.goToMove(0)
+
+    await waitFor(() => {
+      expect(screen.getByText('--')).toBeInTheDocument()
+    })
+  })
+
+  it('keeps the eval bar hidden when the saved game has no arbiter', async () => {
+    const model = await createStartedModel({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['e2e4'],
+    })
+
+    render(<GamePage model={model} />)
+
+    expect(screen.queryByLabelText('Evaluation bar')).not.toBeInTheDocument()
+  })
+
+  it('renders the live arbiter toast on the board and hides it while reviewing history', async () => {
+    let resolveEvaluation: ((value: { score: number; comment: string }) => void) | null = null
+    vi.spyOn(openAiProvider, 'callOpenAi').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveEvaluation = resolve
+        }),
+    )
+
+    const model = await createStartedModel({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+        arbiter: {
+          arbiterKey: 'openai',
+          arbiterConfig: {
+            model: 'gpt-5-nano',
+          },
+        },
+      },
+    })
+
+    render(<GamePage model={model} />)
+
+    model.clickSquare('e2')
+    model.clickSquare('e4')
+
+    await waitFor(() => {
+      expect(resolveEvaluation).not.toBeNull()
+    })
+
+    const completeEvaluation: (value: { score: number; comment: string }) => void =
+      resolveEvaluation ??
+      (() => {
+        throw new Error('Expected arbiter evaluation to be queued.')
+      })
+
+    completeEvaluation({
+      score: 32,
+      comment: 'White opens with purpose.',
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('White opens with purpose.')).toBeInTheDocument()
+    })
+
+    model.goToMove(0)
+
+    await waitFor(() => {
+      expect(screen.queryByText('White opens with purpose.')).not.toBeInTheDocument()
+    })
   })
 })

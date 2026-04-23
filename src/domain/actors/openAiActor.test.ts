@@ -2,12 +2,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   IllegalMoveError,
   OpenAiHttpError,
+  OpenAiResponseError,
   OpenAiTransportError,
   TurnCancelledError,
 } from '@/shared/errors'
 import { AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS } from '@/actors/ai-actor'
 import { createChessEngine } from '../chess/createChessEngine'
 import type { ActorContext } from '../chess/types'
+
+const openAiProviderMock = vi.hoisted(() => ({
+  callOpenAi: vi.fn(),
+}))
+
+vi.mock('@/shared/ai-providers/openai', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/ai-providers/openai')>(
+    '@/shared/ai-providers/openai',
+  )
+
+  return {
+    ...actual,
+    callOpenAi: openAiProviderMock.callOpenAi,
+  }
+})
+
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
@@ -37,63 +54,6 @@ function createActorContext(): ActorContext {
   }
 }
 
-function createSuccessResponse(payload: string) {
-  return new Response(
-    JSON.stringify({
-      output_text: payload,
-      output: [],
-    }),
-    {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    },
-  )
-}
-
-function getFetchInit(call: Array<unknown>): RequestInit {
-  const init = call[1]
-
-  if (init && typeof init === 'object') {
-    return init as RequestInit
-  }
-
-  const input = call[0]
-
-  if (input instanceof Request) {
-    return { signal: input.signal }
-  }
-
-  return {}
-}
-
-async function readFetchJsonBody(call: Array<unknown>) {
-  const init = call[1] as RequestInit | undefined
-  const input = call[0]
-  const body =
-    init?.body ??
-    (input instanceof Request ? await input.clone().text() : undefined)
-
-  if (typeof body !== 'string') {
-    throw new Error('Expected OpenAI SDK request body to be a string.')
-  }
-
-  return JSON.parse(body) as {
-    model: string
-    reasoning?: { effort?: string }
-    input: string
-  }
-}
-
-async function readOpenAiPrompt(call: Array<unknown>) {
-  const body = await readFetchJsonBody(call)
-
-  return JSON.parse(body.input) as {
-    errorStack: Array<{ index: number; name: string; message: string }>
-  }
-}
-
 async function flushMicrotask() {
   await Promise.resolve()
 }
@@ -112,6 +72,22 @@ async function waitForMockCall(mock: { mock: { calls: Array<unknown> } }) {
   throw new Error('Expected mock to be called.')
 }
 
+function createLegalMove() {
+  return {
+    from: 'e2',
+    to: 'e4',
+    promotion: 'null',
+  } as const
+}
+
+function createIllegalMove() {
+  return {
+    from: 'e2',
+    to: 'e5',
+    promotion: 'null',
+  } as const
+}
+
 describe('OpenAiActor', () => {
   const config = {
     apiKey: 'test-key',
@@ -121,10 +97,17 @@ describe('OpenAiActor', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks()
+    openAiProviderMock.callOpenAi.mockReset()
   })
 
-  it('returns transport errors as values', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+  it('returns provider transport errors as values', async () => {
+    openAiProviderMock.callOpenAi.mockRejectedValue(
+      new OpenAiTransportError({
+        operation: 'request',
+        cause: new Error('network down'),
+      }),
+    )
+
     const actor = OpenAiActor.create(config)
 
     if (!(actor instanceof OpenAiActorRuntime)) {
@@ -243,14 +226,15 @@ describe('OpenAiActor', () => {
     expect(actor.confirmationPending()).toBeNull()
   })
 
-  it('retries once after a schema mismatch and returns the legal move', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createSuccessResponse('{"from":"e2","to":"e4"}'))
-      .mockResolvedValueOnce(
-        createSuccessResponse('{"from":"e2","to":"e4","promotion":"null"}'),
+  it('retries once after a provider response mismatch and returns the legal move', async () => {
+    openAiProviderMock.callOpenAi
+      .mockRejectedValueOnce(
+        new OpenAiResponseError({
+          cause: new Error('OpenAI returned malformed JSON'),
+        }),
       )
-    vi.stubGlobal('fetch', fetchMock)
+      .mockResolvedValueOnce(createLegalMove())
+
     const actor = OpenAiActor.create(config)
 
     if (!(actor instanceof OpenAiActorRuntime)) {
@@ -262,8 +246,9 @@ describe('OpenAiActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(openAiProviderMock.callOpenAi).toHaveBeenCalledTimes(2)
     expect(result).not.toBeInstanceOf(Error)
+
     if (result instanceof Error) {
       throw result
     }
@@ -272,15 +257,10 @@ describe('OpenAiActor', () => {
   })
 
   it('retries until the global attempt limit and then returns the invalid move error', async () => {
-    const fetchMock = vi.fn()
-
     for (let attempt = 0; attempt < AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS; attempt += 1) {
-      fetchMock.mockResolvedValueOnce(
-        createSuccessResponse('{"from":"e2","to":"e5","promotion":"null"}'),
-      )
+      openAiProviderMock.callOpenAi.mockResolvedValueOnce(createIllegalMove())
     }
 
-    vi.stubGlobal('fetch', fetchMock)
     const actor = OpenAiActor.create(config)
 
     if (!(actor instanceof OpenAiActorRuntime)) {
@@ -292,23 +272,18 @@ describe('OpenAiActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS)
+    expect(openAiProviderMock.callOpenAi).toHaveBeenCalledTimes(
+      AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS,
+    )
     expect(result).toBeInstanceOf(IllegalMoveError)
   })
 
-  it('passes the accumulated error stack in repeated sdk requests', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createSuccessResponse('{"from":"e2","to":"e5","promotion":"null"}'),
-      )
-      .mockResolvedValueOnce(
-        createSuccessResponse('{"from":"e2","to":"e5","promotion":"null"}'),
-      )
-      .mockResolvedValueOnce(
-        createSuccessResponse('{"from":"e2","to":"e4","promotion":"null"}'),
-      )
-    vi.stubGlobal('fetch', fetchMock)
+  it('passes the accumulated error stack in repeated provider requests', async () => {
+    openAiProviderMock.callOpenAi
+      .mockResolvedValueOnce(createIllegalMove())
+      .mockResolvedValueOnce(createIllegalMove())
+      .mockResolvedValueOnce(createLegalMove())
+
     const actor = OpenAiActor.create(config)
 
     if (!(actor instanceof OpenAiActorRuntime)) {
@@ -321,11 +296,17 @@ describe('OpenAiActor', () => {
     })
 
     expect(result).not.toBeInstanceOf(Error)
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(openAiProviderMock.callOpenAi).toHaveBeenCalledTimes(3)
 
-    const firstInput = await readOpenAiPrompt(fetchMock.mock.calls[0]!)
-    const secondInput = await readOpenAiPrompt(fetchMock.mock.calls[1]!)
-    const thirdInput = await readOpenAiPrompt(fetchMock.mock.calls[2]!)
+    const firstInput = JSON.parse(openAiProviderMock.callOpenAi.mock.calls[0]![0].user) as {
+      errorStack: Array<{ index: number; name: string; message: string }>
+    }
+    const secondInput = JSON.parse(openAiProviderMock.callOpenAi.mock.calls[1]![0].user) as {
+      errorStack: Array<{ index: number; name: string; message: string }>
+    }
+    const thirdInput = JSON.parse(openAiProviderMock.callOpenAi.mock.calls[2]![0].user) as {
+      errorStack: Array<{ index: number; name: string; message: string }>
+    }
 
     expect(firstInput.errorStack).toEqual([])
     expect(secondInput.errorStack).toEqual([
@@ -350,12 +331,13 @@ describe('OpenAiActor', () => {
   })
 
   it('returns http errors without retrying', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response('nope', {
+    openAiProviderMock.callOpenAi.mockRejectedValue(
+      new OpenAiHttpError({
         status: 401,
+        cause: new Error('Unauthorized'),
       }),
     )
-    vi.stubGlobal('fetch', fetchMock)
+
     const actor = OpenAiActor.create(config)
 
     if (!(actor instanceof OpenAiActorRuntime)) {
@@ -367,19 +349,22 @@ describe('OpenAiActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(openAiProviderMock.callOpenAi).toHaveBeenCalledTimes(1)
     expect(result).toBeInstanceOf(OpenAiHttpError)
   })
 
-  it('passes the abort signal to the SDK request options', async () => {
-    let resolveFetch: ((response: Response) => void) | null = null
-    const fetchMock = vi.fn().mockImplementation(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveFetch = resolve
+  it('passes reasoning and abort signal through to the provider call', async () => {
+    let receivedSignal: AbortSignal | undefined
+    let rejectCall: ((error: Error) => void) | null = null
+
+    openAiProviderMock.callOpenAi.mockImplementation(
+      ({ signal }: { signal?: AbortSignal }) =>
+        new Promise((_, reject) => {
+          receivedSignal = signal
+          rejectCall = reject
         }),
     )
-    vi.stubGlobal('fetch', fetchMock)
+
     const actor = OpenAiActor.create(config)
 
     if (!(actor instanceof OpenAiActorRuntime)) {
@@ -387,37 +372,37 @@ describe('OpenAiActor', () => {
     }
 
     const controller = new AbortController()
-
     const resultPromise = actor.requestMove({
       context: createActorContext(),
       signal: controller.signal,
     })
 
-    await waitForMockCall(fetchMock)
+    await waitForMockCall(openAiProviderMock.callOpenAi)
 
-    const requestSignal = getFetchInit(fetchMock.mock.calls[0]!).signal
-    expect(requestSignal).toBeInstanceOf(AbortSignal)
-    expect(requestSignal?.aborted).toBe(false)
+    expect(openAiProviderMock.callOpenAi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: DEFAULT_OPENAI_MODEL,
+        providerOptions: {
+          reasoningEffort: DEFAULT_OPENAI_REASONING_EFFORT,
+        },
+        signal: controller.signal,
+      }),
+    )
+    expect(receivedSignal).toBe(controller.signal)
+    expect(receivedSignal?.aborted).toBe(false)
 
     controller.abort(new TurnCancelledError({ side: 'white' }))
-    expect(requestSignal?.aborted).toBe(true)
+    expect(receivedSignal?.aborted).toBe(true)
 
-    const completeFetch = resolveFetch as ((response: Response) => void) | null
+    const finishCall = rejectCall as ((error: Error) => void) | null
 
-    if (!completeFetch) {
-      throw new Error('Expected OpenAI fetch promise to be created.')
+    if (!finishCall) {
+      throw new Error('Expected provider call to be pending.')
     }
 
-    completeFetch(createSuccessResponse('{"from":"e2","to":"e4","promotion":"null"}'))
+    finishCall(controller.signal.reason as Error)
+
     const result = await resultPromise
-
-    expect(result).not.toBeInstanceOf(Error)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-
-    const body = await readFetchJsonBody(fetchMock.mock.calls[0]!)
-    expect(body).toMatchObject({
-      model: DEFAULT_OPENAI_MODEL,
-      reasoning: { effort: DEFAULT_OPENAI_REASONING_EFFORT },
-    })
+    expect(result).toBeInstanceOf(TurnCancelledError)
   })
 })

@@ -1,7 +1,9 @@
 import { isActorKey, type ActorKey } from '@/actors/registry'
+import { isArbiterKey, type ArbiterProviderKey } from '@/arbiter/registry'
 import { presentError } from '@/shared/errors'
 import { Button, PrimaryButton, SecondaryButton } from '@/shared/ui/Button'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
+import { ArbiterProviderSettings } from './ArbiterProviderSettings'
 import { ActorSettingsFields } from './actorSettings'
 import type { MatchSetupModel } from './model'
 import styles from './MatchSetupPage.module.css'
@@ -76,6 +78,73 @@ const ActorCard = reatomMemo(({
     </section>
   )
 }, 'ActorCard')
+
+const ArbiterCard = reatomMemo(({
+  model,
+}: {
+  model: MatchSetupModel
+}) => {
+  const arbiterConfig = model.arbiterSideConfig()
+  const arbiterValidation = model.arbiterValidation()
+  const arbiterDefinition = model.arbiterDefinition()
+
+  return (
+    <section className={[styles.panel, styles.arbiterPanel].join(' ')}>
+      <div>
+        <p className={styles.eyebrow}>Optional role</p>
+        <h2 className={styles.sideTitle}>Arbiter</h2>
+        <p className={styles.summary}>
+          Evaluates each applied move, powers the eval bar, and adds live commentary without affecting turn flow.
+        </p>
+      </div>
+
+      <div className={styles.fieldGroup}>
+        <label>
+          <span>Provider</span>
+          <select
+            aria-label="Provider"
+            value={arbiterConfig?.arbiterKey ?? 'none'}
+            onChange={(event) => {
+              const nextValue = event.target.value
+
+              if (nextValue === 'none') {
+                model.setArbiterProvider(null)
+                return
+              }
+
+              if (isArbiterKey(nextValue)) {
+                model.setArbiterProvider(nextValue as ArbiterProviderKey)
+              }
+            }}
+          >
+            <option value="none">None</option>
+            {model.availableArbiters.map((entry) => (
+              <option key={entry.key} value={entry.key}>
+                {entry.displayName}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {arbiterConfig !== null && arbiterDefinition !== null ? (
+        <div className={styles.customFields}>
+          <ArbiterProviderSettings
+            value={arbiterConfig}
+            onChange={(next) => model.updateArbiterConfig(next)}
+            errors={arbiterValidation.fieldErrors}
+          />
+        </div>
+      ) : null}
+
+      {arbiterValidation.error ? (
+        <ul className={styles.errorList}>
+          <li>{presentError(arbiterValidation.error)}</li>
+        </ul>
+      ) : null}
+    </section>
+  )
+}, 'ArbiterCard')
 
 export const MatchSetupPage = reatomMemo(({
   model,
@@ -155,6 +224,8 @@ export const MatchSetupPage = reatomMemo(({
         </div>
         <ActorCard side="black" model={model} />
       </div>
+
+      <ArbiterCard model={model} />
 
       {setupError ? (
         <div className={styles.inlineError}>{presentError(setupError)}</div>

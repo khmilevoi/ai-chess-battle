@@ -1,5 +1,5 @@
 import type { ActorMatchInfoProps, ActorSettingsProps } from '../../types'
-import { AiProviderSettings, getOptionLabel } from '../providerSettings'
+import { AiProviderSettings, getOptionLabel } from '@/shared/ai-providers/ui/AiProviderSettings'
 import {
   OPENAI_MODEL_OPTIONS,
   OPENAI_REASONING_OPTIONS,

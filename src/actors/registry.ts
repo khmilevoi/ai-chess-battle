@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ArbiterSideConfig } from '@/arbiter/types'
 import { ActorConfigError } from '@/shared/errors'
 import type { Side } from '@/domain/chess/types'
 import { AnthropicActor } from './ai-actor/anthropic'
@@ -37,7 +38,9 @@ export type ActorModelMap = ActorModelMapFromRegistry<ActorRegistry>
 export type ActorModel = ActorModelUnionFromRegistry<ActorRegistry>
 export type MatchSideConfig<K extends ActorKey = ActorKey> =
   MatchSideConfigFromRegistry<ActorRegistry, K>
-export type MatchConfig = MatchConfigFromRegistry<ActorRegistry>
+export type MatchConfig = MatchConfigFromRegistry<ActorRegistry> & {
+  arbiter?: ArbiterSideConfig | null
+}
 export type SideValidationResult<K extends ActorKey = ActorKey> =
   SideValidation<MatchSideConfig<K>>
 
@@ -82,6 +85,7 @@ export function createDefaultMatchConfig(): MatchConfig {
   return {
     white: createDefaultSideConfig('human'),
     black: createDefaultSideConfig('human'),
+    arbiter: null,
   }
 }
 

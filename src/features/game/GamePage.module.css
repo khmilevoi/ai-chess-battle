@@ -290,16 +290,30 @@
 
 .boardZone {
   display: grid;
-  place-items: center;
+  align-items: center;
   min-width: 0;
   min-height: 0;
+}
+
+.boardShell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: stretch;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.boardStack {
+  position: relative;
+  display: grid;
+  min-width: 0;
 }
 
 .boardPanel {
   display: grid;
   place-items: stretch;
-  width: min(100%, calc(100dvh - 150px), calc(100vw - var(--shell-padding, 48px) * 2));
-  width: min(100%, calc(100cqh - 10px));
+  width: min(100%, calc(100dvh - 150px), calc(100vw - var(--shell-padding, 48px) * 2), 600px);
   max-width: 100%;
   aspect-ratio: 1;
   min-width: 0;
@@ -435,6 +449,11 @@
   background: var(--bg-inverse);
   color: var(--text-inverse);
   border-color: var(--text-inverse);
+}
+
+.arbiterBadge {
+  background: var(--feedback-warning-bg);
+  color: var(--text-primary);
 }
 
 .actorIdentity {
@@ -678,6 +697,11 @@
 
   .boardPanel {
     width: min(100%, 720px);
+  }
+
+  .boardShell {
+    width: min(100%, 720px);
+    grid-template-columns: 1fr;
   }
 
   .historyPanel {

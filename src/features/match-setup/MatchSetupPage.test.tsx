@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultSideConfig } from '@/actors/registry'
+import { setupTestVault } from '@/test/credentialVault'
 import { resetVault } from '@/shared/storage/credentialVault'
 import { MatchSetupPage } from './MatchSetupPage'
 import { createMatchSetupModel } from './model'
@@ -85,5 +86,35 @@ describe('MatchSetupPage', () => {
     await user.selectOptions(modelSelect, 'claude-haiku-4-5')
 
     expect(screen.queryByLabelText('Effort')).not.toBeInTheDocument()
+  })
+
+  it('renders an arbiter card with None and provider-backed settings', async () => {
+    await setupTestVault({
+      openai: 'sk-arbiter',
+    })
+
+    const user = userEvent.setup()
+    const model = createMatchSetupModel({
+      name: `match-setup-page-arbiter-${crypto.randomUUID()}`,
+      initialConfig: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+        arbiter: null,
+      },
+      goToGame: vi.fn(),
+      goToGames: vi.fn(),
+    })
+
+    render(<MatchSetupPage model={model} />)
+
+    expect(screen.getByRole('heading', { name: 'Arbiter' })).toBeInTheDocument()
+
+    const providerSelect = screen.getByLabelText('Provider') as HTMLSelectElement
+    expect(within(providerSelect).getByRole('option', { name: 'None' })).toBeInTheDocument()
+
+    await user.selectOptions(providerSelect, 'openai')
+
+    expect(screen.getAllByText('API key').length).toBe(1)
+    expect(screen.getAllByText('Model').length).toBeGreaterThan(0)
   })
 })

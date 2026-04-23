@@ -10,6 +10,8 @@ import { Button } from '@/shared/ui/Button'
 import { reatomMemo } from '@/shared/ui/reatomMemo'
 import { Board } from '../board/Board'
 import { PromotionPicker } from '../board/PromotionPicker'
+import { ArbiterToastLayer } from './ArbiterToastLayer'
+import { EvalBar } from './EvalBar'
 import type { GameModel } from './model'
 import styles from './GamePage.module.css'
 
@@ -20,6 +22,7 @@ const sideLabels = {
 
 type ActorPanelEntry = ReturnType<GameModel['actorPanels']>[number]
 type MatchInfoEntry = ReturnType<GameModel['matchInfoEntries']>[number]
+type ArbiterInfoEntry = ReturnType<GameModel['arbiterInfoEntry']>
 
 function getActorControlsNotice({
   isAtLatestMove,
@@ -141,8 +144,10 @@ function renderActorControlsPanel({
 
 function renderMatchInfoPanel({
   matchInfoEntries,
+  arbiterInfoEntry,
 }: {
   matchInfoEntries: Array<MatchInfoEntry>
+  arbiterInfoEntry: ArbiterInfoEntry
 }) {
   return (
     <>
@@ -186,6 +191,36 @@ function renderMatchInfoPanel({
             </section>
           )
         })}
+
+        {arbiterInfoEntry ? (
+          <section className={styles.matchInfoSection}>
+            <div className={styles.matchInfoHeader}>
+              <span className={[styles.sideBadge, styles.arbiterBadge].join(' ')}>
+                Arbiter
+              </span>
+            </div>
+
+            <div className={styles.actorIdentity}>
+              <h3 className={styles.actorTitle}>{arbiterInfoEntry.displayName}</h3>
+              <p className={styles.actorSummary}>
+                Evaluates every applied move and adds live commentary.
+              </p>
+            </div>
+
+            <div className={styles.matchInfoSlot}>
+              <dl>
+                <div>
+                  <dt>Provider</dt>
+                  <dd>{arbiterInfoEntry.displayName}</dd>
+                </div>
+                <div>
+                  <dt>Model</dt>
+                  <dd>{arbiterInfoEntry.modelLabel}</dd>
+                </div>
+              </dl>
+            </div>
+          </section>
+        ) : null}
       </div>
     </>
   )
@@ -215,6 +250,9 @@ export const GamePage = reatomMemo(({
   const pendingPromotion = model.pendingPromotion()
   const actorPanels = model.actorPanels()
   const matchInfoEntries = model.matchInfoEntries()
+  const arbiterInfoEntry = model.arbiterInfoEntry()
+  const resolvedEvaluation = model.resolvedEvaluation()
+  const arbiterLiveComment = isAtLatestMove ? model.arbiterLiveComment() : null
   const hasActorControls = actorPanels.some((actorPanel) => actorPanel.hasControls)
   const controlsNotice = getActorControlsNotice({
     isAtLatestMove: model.isAtLatestMove,
@@ -341,23 +379,39 @@ export const GamePage = reatomMemo(({
           <aside className={[styles.panel, styles.matchInfoPanel].join(' ')}>
             {renderMatchInfoPanel({
               matchInfoEntries,
+              arbiterInfoEntry,
             })}
           </aside>
         </aside>
 
         <main className={styles.boardZone} aria-label="Chess board area">
-          <section className={styles.boardPanel}>
-            <Board
-              snapshot={snapshot}
-              selectedSquare={selectedSquare}
-              legalTargets={selectedLegalMoves}
-              movableSquares={movableSquares}
-              interactive={boardInteractive}
-              onSquareClick={(square) => {
-                model.clickSquare(square)
-              }}
-            />
-          </section>
+          <div className={styles.boardShell}>
+            {arbiterInfoEntry ? (
+              <EvalBar evaluation={resolvedEvaluation} />
+            ) : null}
+
+            <section className={styles.boardStack}>
+              <section className={styles.boardPanel}>
+                <Board
+                  snapshot={snapshot}
+                  selectedSquare={selectedSquare}
+                  legalTargets={selectedLegalMoves}
+                  movableSquares={movableSquares}
+                  interactive={boardInteractive}
+                  onSquareClick={(square) => {
+                    model.clickSquare(square)
+                  }}
+                />
+              </section>
+
+              <ArbiterToastLayer
+                comment={arbiterLiveComment}
+                onDismiss={() => {
+                  model.dismissArbiterLiveComment()
+                }}
+              />
+            </section>
+          </div>
           {pendingPromotion ? (
             <PromotionPicker
               side={snapshot.turn}

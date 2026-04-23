@@ -1,0 +1,61 @@
+import type { ZodObject, ZodString } from 'zod'
+import type { BoardSnapshot } from '@/domain/chess/types'
+import type { AiProviderKey, AiProviderModelOption } from '@/shared/ai-providers'
+
+export type Eval = {
+  score: number
+  comment: string
+}
+
+export type ArbiterProviderKey = AiProviderKey
+
+export type OpenAiArbiterConfig = {
+  model: string
+}
+
+export type AnthropicArbiterConfig = {
+  model: string
+}
+
+export type GoogleArbiterConfig = {
+  model: string
+}
+
+export type ArbiterSideConfig =
+  | {
+      arbiterKey: 'openai'
+      arbiterConfig: OpenAiArbiterConfig
+    }
+  | {
+      arbiterKey: 'anthropic'
+      arbiterConfig: AnthropicArbiterConfig
+    }
+  | {
+      arbiterKey: 'google'
+      arbiterConfig: GoogleArbiterConfig
+    }
+
+export type ArbiterRequestArgs = {
+  snapshot: BoardSnapshot
+  signal: AbortSignal
+}
+
+export type ArbiterModel = {
+  requestEvaluation: (args: ArbiterRequestArgs) => Promise<Eval | Error>
+}
+
+export type ArbiterDescriptor<
+  Key extends ArbiterProviderKey = ArbiterProviderKey,
+> = {
+  key: Key
+  displayName: string
+  modelOptions: ReadonlyArray<AiProviderModelOption>
+  configSchema: ZodObject<{
+    model: ZodString
+  }>
+  createDefaultConfig: () => Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig']
+  create: (args: {
+    apiKey: string
+    config: Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig']
+  }) => ArbiterModel
+}

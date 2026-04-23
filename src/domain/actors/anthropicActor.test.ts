@@ -1,7 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AnthropicHttpError,
+  AnthropicResponseError,
   AnthropicTransportError,
   IllegalMoveError,
   TurnCancelledError,
@@ -9,13 +9,28 @@ import {
 import { AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS } from '@/actors/ai-actor'
 import { createChessEngine } from '../chess/createChessEngine'
 import type { ActorContext } from '../chess/types'
+
+const anthropicProviderMock = vi.hoisted(() => ({
+  callAnthropic: vi.fn(),
+}))
+
+vi.mock('@/shared/ai-providers/anthropic', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/ai-providers/anthropic')>(
+    '@/shared/ai-providers/anthropic',
+  )
+
+  return {
+    ...actual,
+    callAnthropic: anthropicProviderMock.callAnthropic,
+  }
+})
+
 import {
   AnthropicActor,
   AnthropicActorRuntime,
   DEFAULT_ANTHROPIC_EFFORT,
   DEFAULT_ANTHROPIC_MODEL,
 } from '@/actors/ai-actor/anthropic'
-import { AI_ACTOR_MAX_OUTPUT_TOKENS } from '@/actors/ai-actor/request'
 
 function createActorContext(): ActorContext {
   const engine = createChessEngine()
@@ -39,105 +54,24 @@ function createActorContext(): ActorContext {
   }
 }
 
-function createParsedResponse(payload: unknown) {
-  return {
-    parsed_output: payload,
-  }
-}
-
-function createAnthropicMessageResponse(text: string) {
-  return new Response(
-    JSON.stringify({
-      id: 'msg_test',
-      type: 'message',
-      role: 'assistant',
-      model: DEFAULT_ANTHROPIC_MODEL,
-      content: [
-        {
-          type: 'text',
-          text,
-        },
-      ],
-      stop_reason: 'end_turn',
-      stop_sequence: null,
-      container: null,
-      usage: {
-        input_tokens: 10,
-        output_tokens: 5,
-        cache_creation_input_tokens: null,
-        cache_read_input_tokens: null,
-        server_tool_use: null,
-        service_tier: null,
-      },
-    }),
-    {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'request-id': 'req_success',
-      },
-    },
-  )
-}
-
-function createAnthropicErrorResponse({
-  status,
-  errorType,
-  message,
-  requestId,
-  retryAfterMs,
-}: {
-  status: number
-  errorType: string
-  message: string
-  requestId: string
-  retryAfterMs?: number
-}) {
-  const headers = new Headers({
-    'Content-Type': 'application/json',
-    'request-id': requestId,
-  })
-
-  if (retryAfterMs !== undefined) {
-    headers.set('retry-after-ms', String(retryAfterMs))
-  }
-
-  return new Response(
-    JSON.stringify({
-      type: 'error',
-      error: {
-        type: errorType,
-        message,
-      },
-      request_id: requestId,
-    }),
-    {
-      status,
-      headers,
-    },
-  )
-}
-
 async function flushMicrotask() {
   await Promise.resolve()
 }
 
-/**
- * Pre-seed the lazy sdkCache so tests can spy on `client.messages.parse`
- * without triggering a real network call. Returns the mock Anthropic client.
- */
-function preSeedSdk(actor: AnthropicActorRuntime, apiKey: string): Anthropic {
-  const client = new Anthropic({
-    apiKey,
-    dangerouslyAllowBrowser: true,
-    maxRetries: 2,
-  })
-  Reflect.set(actor, 'sdkCache', {
-    client,
-    APIError: Anthropic.APIError,
-    zodOutputFormat: () => ({}),
-  })
-  return client
+function createLegalMove() {
+  return {
+    from: 'e2',
+    to: 'e4',
+    promotion: 'null',
+  } as const
+}
+
+function createIllegalMove() {
+  return {
+    from: 'e2',
+    to: 'e5',
+    promotion: 'null',
+  } as const
 }
 
 describe('AnthropicActor', () => {
@@ -149,18 +83,22 @@ describe('AnthropicActor', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks()
-    vi.unstubAllGlobals()
+    anthropicProviderMock.callAnthropic.mockReset()
   })
 
-  it('returns transport errors as values', async () => {
+  it('returns provider transport errors as values', async () => {
+    anthropicProviderMock.callAnthropic.mockRejectedValue(
+      new AnthropicTransportError({
+        operation: 'request',
+        cause: new Error('network down'),
+      }),
+    )
+
     const actor = AnthropicActor.create(config)
 
     if (!(actor instanceof AnthropicActorRuntime)) {
       throw actor
     }
-
-    const client = preSeedSdk(actor, config.apiKey)
-    vi.spyOn(client.messages, 'parse').mockRejectedValue(new Error('network down'))
 
     const result = await actor.requestMove({
       context: createActorContext(),
@@ -168,27 +106,6 @@ describe('AnthropicActor', () => {
     })
 
     expect(result).toBeInstanceOf(AnthropicTransportError)
-  })
-
-  it('configures the sdk client with the explicit retry budget', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      createAnthropicMessageResponse('{"from":"e2","to":"e4","promotion":"null"}'),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-
-    const actor = AnthropicActor.create(config)
-
-    if (!(actor instanceof AnthropicActorRuntime)) {
-      throw actor
-    }
-
-    await actor.requestMove({
-      context: createActorContext(),
-      signal: new AbortController().signal,
-    })
-
-    const sdkCache = Reflect.get(actor, 'sdkCache') as { client: Anthropic } | null
-    expect(sdkCache?.client.maxRetries).toBe(2)
   })
 
   it('does not wait for confirmation by default', async () => {
@@ -269,59 +186,14 @@ describe('AnthropicActor', () => {
     expect(actor.confirmationPending()).toBeNull()
   })
 
-  it('retries once after a schema mismatch and returns the legal move', async () => {
-    const actor = AnthropicActor.create(config)
-
-    if (!(actor instanceof AnthropicActorRuntime)) {
-      throw actor
-    }
-
-    const client = preSeedSdk(actor, config.apiKey)
-    const parseMock = vi
-      .spyOn(client.messages, 'parse')
-      .mockResolvedValueOnce(
-        createParsedResponse({ from: 'e2', to: 'e4' }) as never,
-      )
-      .mockResolvedValueOnce(
-        createParsedResponse({
-          from: 'e2',
-          to: 'e4',
-          promotion: 'null',
-        }) as never,
-      )
-
-    const result = await actor.requestMove({
-      context: createActorContext(),
-      signal: new AbortController().signal,
-    })
-
-    expect(parseMock).toHaveBeenCalledTimes(2)
-    expect(result).not.toBeInstanceOf(Error)
-    if (result instanceof Error) {
-      throw result
-    }
-
-    expect(result.uci).toBe('e2e4')
-  })
-
-  it('retries overloaded responses through the sdk and returns the legal move', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createAnthropicErrorResponse({
-          status: 529,
-          errorType: 'overloaded_error',
-          message: 'Overloaded',
-          requestId: 'req_retry_1',
-          retryAfterMs: 0,
+  it('retries once after a provider response mismatch and returns the legal move', async () => {
+    anthropicProviderMock.callAnthropic
+      .mockRejectedValueOnce(
+        new AnthropicResponseError({
+          cause: new Error('Anthropic returned malformed output'),
         }),
       )
-      .mockResolvedValueOnce(
-        createAnthropicMessageResponse(
-          '{"from":"e2","to":"e4","promotion":"null"}',
-        ),
-      )
-    vi.stubGlobal('fetch', fetchMock)
+      .mockResolvedValueOnce(createLegalMove())
 
     const actor = AnthropicActor.create(config)
 
@@ -334,8 +206,9 @@ describe('AnthropicActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(anthropicProviderMock.callAnthropic).toHaveBeenCalledTimes(2)
     expect(result).not.toBeInstanceOf(Error)
+
     if (result instanceof Error) {
       throw result
     }
@@ -344,23 +217,14 @@ describe('AnthropicActor', () => {
   })
 
   it('retries until the global attempt limit and then returns the invalid move error', async () => {
+    for (let attempt = 0; attempt < AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS; attempt += 1) {
+      anthropicProviderMock.callAnthropic.mockResolvedValueOnce(createIllegalMove())
+    }
+
     const actor = AnthropicActor.create(config)
 
     if (!(actor instanceof AnthropicActorRuntime)) {
       throw actor
-    }
-
-    const client = preSeedSdk(actor, config.apiKey)
-    const parseMock = vi.spyOn(client.messages, 'parse')
-
-    for (let attempt = 0; attempt < AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS; attempt += 1) {
-      parseMock.mockResolvedValueOnce(
-        createParsedResponse({
-          from: 'e2',
-          to: 'e5',
-          promotion: 'null',
-        }) as never,
-      )
     }
 
     const result = await actor.requestMove({
@@ -368,41 +232,23 @@ describe('AnthropicActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(parseMock).toHaveBeenCalledTimes(AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS)
+    expect(anthropicProviderMock.callAnthropic).toHaveBeenCalledTimes(
+      AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS,
+    )
     expect(result).toBeInstanceOf(IllegalMoveError)
   })
 
-  it('passes the accumulated error stack in repeated sdk requests', async () => {
+  it('passes the accumulated error stack in repeated provider requests', async () => {
+    anthropicProviderMock.callAnthropic
+      .mockResolvedValueOnce(createIllegalMove())
+      .mockResolvedValueOnce(createIllegalMove())
+      .mockResolvedValueOnce(createLegalMove())
+
     const actor = AnthropicActor.create(config)
 
     if (!(actor instanceof AnthropicActorRuntime)) {
       throw actor
     }
-
-    const client = preSeedSdk(actor, config.apiKey)
-    const parseMock = vi
-      .spyOn(client.messages, 'parse')
-      .mockResolvedValueOnce(
-        createParsedResponse({
-          from: 'e2',
-          to: 'e5',
-          promotion: 'null',
-        }) as never,
-      )
-      .mockResolvedValueOnce(
-        createParsedResponse({
-          from: 'e2',
-          to: 'e5',
-          promotion: 'null',
-        }) as never,
-      )
-      .mockResolvedValueOnce(
-        createParsedResponse({
-          from: 'e2',
-          to: 'e4',
-          promotion: 'null',
-        }) as never,
-      )
 
     const result = await actor.requestMove({
       context: createActorContext(),
@@ -410,15 +256,15 @@ describe('AnthropicActor', () => {
     })
 
     expect(result).not.toBeInstanceOf(Error)
-    expect(parseMock).toHaveBeenCalledTimes(3)
+    expect(anthropicProviderMock.callAnthropic).toHaveBeenCalledTimes(3)
 
-    const firstInput = JSON.parse(parseMock.mock.calls[0][0].messages[0]?.content as string) as {
+    const firstInput = JSON.parse(anthropicProviderMock.callAnthropic.mock.calls[0]![0].user) as {
       errorStack: Array<{ index: number; name: string; message: string }>
     }
-    const secondInput = JSON.parse(parseMock.mock.calls[1][0].messages[0]?.content as string) as {
+    const secondInput = JSON.parse(anthropicProviderMock.callAnthropic.mock.calls[1]![0].user) as {
       errorStack: Array<{ index: number; name: string; message: string }>
     }
-    const thirdInput = JSON.parse(parseMock.mock.calls[2][0].messages[0]?.content as string) as {
+    const thirdInput = JSON.parse(anthropicProviderMock.callAnthropic.mock.calls[2]![0].user) as {
       errorStack: Array<{ index: number; name: string; message: string }>
     }
 
@@ -445,15 +291,12 @@ describe('AnthropicActor', () => {
   })
 
   it('returns http errors without retrying', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      createAnthropicErrorResponse({
+    anthropicProviderMock.callAnthropic.mockRejectedValue(
+      new AnthropicHttpError({
         status: 401,
-        errorType: 'authentication_error',
-        message: 'Unauthorized',
-        requestId: 'req_401',
+        cause: new Error('Unauthorized'),
       }),
     )
-    vi.stubGlobal('fetch', fetchMock)
 
     const actor = AnthropicActor.create(config)
 
@@ -466,55 +309,39 @@ describe('AnthropicActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(anthropicProviderMock.callAnthropic).toHaveBeenCalledTimes(1)
     expect(result).toBeInstanceOf(AnthropicHttpError)
   })
 
-  it('passes adaptive thinking, effort, and the abort signal to the SDK request options for Claude Sonnet 4.6', async () => {
+  it('passes adaptive thinking and effort to Claude Sonnet 4.6 provider requests', async () => {
+    anthropicProviderMock.callAnthropic.mockResolvedValue(createLegalMove())
+
     const actor = AnthropicActor.create(config)
 
     if (!(actor instanceof AnthropicActorRuntime)) {
       throw actor
     }
 
-    const controller = new AbortController()
-    const client = preSeedSdk(actor, config.apiKey)
-    const parseMock = vi
-      .spyOn(client.messages, 'parse')
-      .mockResolvedValue(
-        createParsedResponse({
-          from: 'e2',
-          to: 'e4',
-          promotion: 'null',
-        }) as never,
-      )
-
     const result = await actor.requestMove({
       context: createActorContext(),
-      signal: controller.signal,
+      signal: new AbortController().signal,
     })
 
     expect(result).not.toBeInstanceOf(Error)
-    expect(parseMock).toHaveBeenCalledTimes(1)
-    expect(parseMock).toHaveBeenCalledWith(
+    expect(anthropicProviderMock.callAnthropic).toHaveBeenCalledWith(
       expect.objectContaining({
         model: DEFAULT_ANTHROPIC_MODEL,
-        max_tokens: AI_ACTOR_MAX_OUTPUT_TOKENS,
-        thinking: {
-          type: 'adaptive',
-        },
-        output_config: expect.objectContaining({
+        providerOptions: {
           effort: DEFAULT_ANTHROPIC_EFFORT,
-          format: expect.anything(),
-        }),
+          thinking: 'adaptive',
+        },
       }),
-      {
-        signal: controller.signal,
-      },
     )
   })
 
-  it('sends xhigh effort for Claude Opus 4.7 requests', async () => {
+  it('passes xhigh effort for Claude Opus 4.7 requests', async () => {
+    anthropicProviderMock.callAnthropic.mockResolvedValue(createLegalMove())
+
     const actor = AnthropicActor.create({
       ...config,
       model: 'claude-opus-4-7',
@@ -525,39 +352,26 @@ describe('AnthropicActor', () => {
       throw actor
     }
 
-    const client = preSeedSdk(actor, config.apiKey)
-    const parseMock = vi
-      .spyOn(client.messages, 'parse')
-      .mockResolvedValue(
-        createParsedResponse({
-          from: 'e2',
-          to: 'e4',
-          promotion: 'null',
-        }) as never,
-      )
-
     const result = await actor.requestMove({
       context: createActorContext(),
       signal: new AbortController().signal,
     })
 
     expect(result).not.toBeInstanceOf(Error)
-    expect(parseMock).toHaveBeenCalledTimes(1)
-    expect(parseMock.mock.calls[0]?.[0]).toEqual(
+    expect(anthropicProviderMock.callAnthropic).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'claude-opus-4-7',
-        thinking: {
-          type: 'adaptive',
-        },
-        output_config: expect.objectContaining({
+        providerOptions: {
           effort: 'xhigh',
-          format: expect.anything(),
-        }),
+          thinking: 'adaptive',
+        },
       }),
     )
   })
 
-  it('omits adaptive thinking and effort for Claude Haiku 4.5 requests', async () => {
+  it('omits effort and adaptive thinking for Claude Haiku 4.5 requests', async () => {
+    anthropicProviderMock.callAnthropic.mockResolvedValue(createLegalMove())
+
     const actor = AnthropicActor.create({
       ...config,
       model: 'claude-haiku-4-5',
@@ -568,35 +382,20 @@ describe('AnthropicActor', () => {
       throw actor
     }
 
-    const client = preSeedSdk(actor, config.apiKey)
-    const parseMock = vi
-      .spyOn(client.messages, 'parse')
-      .mockResolvedValue(
-        createParsedResponse({
-          from: 'e2',
-          to: 'e4',
-          promotion: 'null',
-        }) as never,
-      )
-
     const result = await actor.requestMove({
       context: createActorContext(),
       signal: new AbortController().signal,
     })
 
     expect(result).not.toBeInstanceOf(Error)
-    expect(parseMock).toHaveBeenCalledTimes(1)
-
-    const params = parseMock.mock.calls[0]?.[0]
-    expect(params).toEqual(
+    expect(anthropicProviderMock.callAnthropic).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'claude-haiku-4-5',
-        output_config: expect.objectContaining({
-          format: expect.anything(),
-        }),
+        providerOptions: {
+          effort: undefined,
+          thinking: undefined,
+        },
       }),
     )
-    expect(params).not.toHaveProperty('thinking')
-    expect(params.output_config).not.toHaveProperty('effort')
   })
 })

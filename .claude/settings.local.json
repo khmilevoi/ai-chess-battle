@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e \"const r = require\\('C:/Users/Khmil/JsProjects/ai-chess-battle/node_modules/@reatom/core/build/index.js'\\); console.log\\(Object.keys\\(r\\).filter\\(k => k.toLowerCase\\(\\).includes\\('persist'\\) || k.toLowerCase\\(\\).includes\\('local'\\) || k.toLowerCase\\(\\).includes\\('storage'\\)\\)\\)\")",
       "Bash(rtk vitest *)",
       "Bash(rtk tsc *)",
       "Bash(rtk git *)",
@@ -9,7 +8,8 @@
       "Bash(rtk grep *)",
       "Bash(vercel --version)",
       "Bash(vercel --prod)",
-      "Bash(vercel login *)"
+      "Bash(vercel login *)",
+      "Bash(rtk ls *)"
     ]
   }
 }

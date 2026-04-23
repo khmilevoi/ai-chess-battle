@@ -173,6 +173,12 @@
   color: var(--text-inverse-muted);
 }
 
+.arbiterPanel {
+  background:
+    linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface-alt) 100%);
+  color: var(--text-primary);
+}
+
 .sideTitle {
   margin: 0;
   font-family: var(--font-display);

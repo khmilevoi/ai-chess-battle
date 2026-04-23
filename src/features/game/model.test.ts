@@ -7,6 +7,7 @@ import {
 } from '@/actors/ai-actor/open-ai'
 import { createDefaultSideConfig } from '@/actors/registry'
 import type { MatchConfig } from '@/actors/registry'
+import * as openAiProvider from '@/shared/ai-providers/openai'
 import { ActorError } from '@/shared/errors'
 import {
   clearStoredGameArchive,
@@ -91,6 +92,7 @@ function createSavedGame({
 
 describe('createGameModel', () => {
   beforeEach(async () => {
+    openAiProvider.resetOpenAiSdkCache()
     clearStoredGameArchive()
     window.localStorage.clear()
     await setupTestVault()
@@ -756,5 +758,102 @@ describe('createGameModel', () => {
     expect(actor.confirmationPending()).toEqual({
       params: { side: 'white' },
     })
+  })
+
+  it('queues arbiter evaluations after persisted moves and stores the live comment', async () => {
+    let resolveEvaluation: ((value: { score: number; comment: string }) => void) | null = null
+    vi.spyOn(openAiProvider, 'callOpenAi').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveEvaluation = resolve
+        }),
+    )
+
+    const game = createSavedGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+        arbiter: {
+          arbiterKey: 'openai',
+          arbiterConfig: {
+            model: 'gpt-5-nano',
+          },
+        },
+      },
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+
+    model.clickSquare('e2')
+    model.clickSquare('e4')
+    await flush(2)
+
+    const updatedAtAfterMove = peek(storedGameRecordAtom(game.id))?.updatedAt ?? null
+    expect(resolveEvaluation).not.toBeNull()
+
+    const completeEvaluation: (value: { score: number; comment: string }) => void =
+      resolveEvaluation ??
+      (() => {
+        throw new Error('Expected arbiter evaluation to be queued.')
+      })
+
+    completeEvaluation({
+      score: 32,
+      comment: 'White opens with purpose.',
+    })
+
+    await waitForCondition(
+      () => peek(storedGameRecordAtom(game.id))?.evaluations?.[0]?.score === 32,
+    )
+
+    expect(model.resolvedEvaluation()?.score).toBe(32)
+    expect(model.arbiterLiveComment()?.text).toBe('White opens with purpose.')
+    expect(peek(storedGameRecordAtom(game.id))?.updatedAt).toBe(updatedAtAfterMove)
+  })
+
+  it('persists null when an arbiter evaluation fails', async () => {
+    vi.spyOn(openAiProvider, 'callOpenAi').mockRejectedValue(
+      new openAiProvider.OpenAiTransportError({
+        operation: 'request',
+        cause: new Error('network down'),
+      }),
+    )
+
+    const game = createSavedGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+        arbiter: {
+          arbiterKey: 'openai',
+          arbiterConfig: {
+            model: 'gpt-5-nano',
+          },
+        },
+      },
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+
+    model.clickSquare('e2')
+    model.clickSquare('e4')
+
+    await waitForCondition(
+      () => peek(storedGameRecordAtom(game.id))?.evaluations?.[0] === null,
+    )
+
+    expect(model.resolvedEvaluation()).toBeNull()
+    expect(model.arbiterLiveComment()).toBeNull()
   })
 })

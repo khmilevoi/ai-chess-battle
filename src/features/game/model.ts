@@ -13,11 +13,13 @@ import {
   wrap,
 } from '@reatom/core'
 import { getRegisteredActor } from '@/actors/registry'
+import { getRegisteredArbiter } from '@/arbiter/registry'
 import type {
   ActorModel,
   MatchConfig,
   MatchSideConfig,
 } from '@/actors/registry'
+import type { ArbiterModel, Eval } from '@/arbiter/types'
 import {
   isTerminalStatus,
   toUciMove,
@@ -37,6 +39,7 @@ import {
   updateStoredGameRecord,
   type StoredGameActorControls,
 } from '@/shared/storage/gameSessionStorage'
+import { vaultSecretsAtom } from '@/shared/storage/credentialVault'
 import { CredentialError, StorageError, TurnCancelledError } from '@/shared/errors'
 
 type SideActors = Record<
@@ -76,11 +79,29 @@ type MatchInfoEntry = {
   summary: string
 }
 
+type ArbiterInfoEntry = {
+  arbiterKey: NonNullable<MatchConfig['arbiter']>['arbiterKey']
+  displayName: string
+  model: string
+  modelLabel: string
+}
+
 type RuntimeControlsByGroupKey = Record<string, unknown>
 
 type HistoryMove = {
   moveNumber: number
   uci: string
+}
+
+type ArbiterQueueEntry = {
+  moveIndex: number
+}
+
+type ArbiterLiveComment = {
+  id: number
+  side: BoardSnapshot['turn']
+  text: string
+  createdAt: number
 }
 
 type GameStatusTone = 'neutral' | 'warning' | 'error' | 'success'
@@ -228,6 +249,42 @@ function createMissingGameError(gameId: string): StorageError {
   })
 }
 
+function getMoveSide(moveIndex: number): BoardSnapshot['turn'] {
+  return moveIndex % 2 === 0 ? 'white' : 'black'
+}
+
+function createUnavailableArbiter(error: Error): ArbiterModel {
+  return {
+    async requestEvaluation() {
+      return error
+    },
+  }
+}
+
+function createConfiguredArbiter(
+  config: MatchConfig['arbiter'],
+): ArbiterModel | null {
+  if (config === null || config === undefined) {
+    return null
+  }
+
+  const descriptor = getRegisteredArbiter(config.arbiterKey)
+  const apiKey = peek(vaultSecretsAtom)[config.arbiterKey] ?? ''
+
+  if (apiKey.length === 0) {
+    return createUnavailableArbiter(
+      new CredentialError({
+        message: `Unlock the vault and enter an API key for ${descriptor.displayName}.`,
+      }),
+    )
+  }
+
+  return descriptor.create({
+    apiKey,
+    config: config.arbiterConfig as never,
+  })
+}
+
 export function createGameModel({
   name,
   gameId,
@@ -248,6 +305,15 @@ export function createGameModel({
   const turnStartedAtAtom = atom<number | null>(null, `${name}.turnStartedAt`)
   const turnElapsedSecondsAtom = atom<number>(0, `${name}.turnElapsedSeconds`)
   const runtimeError = atom<Error | null>(null, `${name}.runtimeError`)
+  const arbiterRuntime = atom<ArbiterModel | null>(null, `${name}.arbiterRuntime`)
+  const arbiterQueue = atom([] as Array<ArbiterQueueEntry>, `${name}.arbiterQueue`)
+  const arbiterInFlight = atom<ArbiterQueueEntry | null>(null, `${name}.arbiterInFlight`)
+  const evaluationsByMove = atom([] as Array<Eval | null>, `${name}.evaluationsByMove`)
+  const arbiterLiveComment = atom<ArbiterLiveComment | null>(
+    null,
+    `${name}.arbiterLiveComment`,
+  )
+  const arbiterWarningShown = atom(false, `${name}.arbiterWarningShown`)
   const startupBlockedConfigSignature = atom<string | null>(
     null,
     `${name}.startupBlockedConfigSignature`,
@@ -500,6 +566,45 @@ export function createGameModel({
       } satisfies MatchInfoEntry
     })
   }, `${name}.matchInfoEntries`)
+  const arbiterInfoEntry = computed(() => {
+    const arbiterConfig = storedGame()?.config.arbiter
+
+    if (arbiterConfig === null || arbiterConfig === undefined) {
+      return null
+    }
+
+    const descriptor = getRegisteredArbiter(arbiterConfig.arbiterKey)
+    const modelLabel =
+      descriptor.modelOptions.find(
+        (option) => option.value === arbiterConfig.arbiterConfig.model,
+      )?.label ?? arbiterConfig.arbiterConfig.model
+
+    return {
+      arbiterKey: arbiterConfig.arbiterKey,
+      displayName: descriptor.displayName,
+      model: arbiterConfig.arbiterConfig.model,
+      modelLabel,
+    } satisfies ArbiterInfoEntry
+  }, `${name}.arbiterInfoEntry`)
+  const resolvedEvaluation = computed(() => {
+    const cursor = historyCursor()
+
+    if (cursor === 0) {
+      return null
+    }
+
+    const currentEvaluations = evaluationsByMove()
+
+    for (let index = Math.min(cursor, currentEvaluations.length) - 1; index >= 0; index -= 1) {
+      const evaluation = currentEvaluations[index]
+
+      if (evaluation !== null && evaluation !== undefined) {
+        return evaluation
+      }
+    }
+
+    return null
+  }, `${name}.resolvedEvaluation`)
   const activeHumanActor = computed(() => {
     const currentActorState = activeActorState()
 
@@ -687,8 +792,19 @@ export function createGameModel({
 
   const resetState = action(() => {
     stopLiveLoop()
+    runArbiterQueue.abort(
+      new TurnCancelledError({
+        side: peek(snapshot)?.turn ?? 'white',
+      }),
+    )
     engine.set(null)
     actors.set(null)
+    arbiterRuntime.set(null)
+    arbiterQueue.set([])
+    arbiterInFlight.set(null)
+    evaluationsByMove.set([])
+    arbiterLiveComment.set(null)
+    arbiterWarningShown.set(false)
     snapshot.set(null)
     historyCursor.set(0)
     selectedSquare.set(null)
@@ -775,6 +891,200 @@ export function createGameModel({
 
     return persisted
   }, `${name}.persistSnapshot`)
+  const persistArbiterEvaluation = action(
+    ({
+      moveIndex,
+      evaluation,
+      syncLocal = true,
+    }: {
+      moveIndex: number
+      evaluation: Eval | null
+      syncLocal?: boolean
+    }) => {
+      const currentGame = peek(storedGameRecordAtom(gameId))
+
+      if (currentGame === null) {
+        return createMissingGameError(gameId)
+      }
+
+      const nextEvaluations = [...(currentGame.evaluations ?? [])]
+      nextEvaluations[moveIndex] = evaluation
+
+      const persisted = updateStoredGameRecord({
+        gameId,
+        evaluations: nextEvaluations,
+        updatedAt: currentGame.updatedAt,
+      })
+
+      if (persisted === null) {
+        return new StorageError({
+          message: `Failed to persist arbiter evaluation for saved game "${gameId}".`,
+        })
+      }
+
+      if (syncLocal) {
+        const localEvaluations = [...peek(evaluationsByMove)]
+        localEvaluations[moveIndex] = evaluation
+        evaluationsByMove.set(localEvaluations)
+      }
+
+      return persisted
+    },
+    `${name}.persistArbiterEvaluation`,
+  )
+  const dismissArbiterLiveComment = action(() => {
+    arbiterLiveComment.set(null)
+    return null
+  }, `${name}.dismissArbiterLiveComment`)
+  const queueArbiterEvaluation = action((moveIndex: number) => {
+    if (peek(arbiterRuntime) === null) {
+      return null
+    }
+
+    const nextQueue = [...peek(arbiterQueue), { moveIndex }]
+    arbiterQueue.set(nextQueue)
+
+    if (peek(arbiterInFlight) === null) {
+      void runArbiterQueue()
+    }
+
+    return moveIndex
+  }, `${name}.queueArbiterEvaluation`)
+  const pushArbiterUnavailableWarning = action((error: Error) => {
+    if (peek(arbiterWarningShown)) {
+      return error
+    }
+
+    arbiterWarningShown.set(true)
+
+    import('@/shared/ui/Toast').then(({ pushToast }) => {
+      pushToast({
+        tone: 'warning',
+        title: 'Arbiter unavailable',
+        description: error.message,
+      })
+    })
+
+    return error
+  }, `${name}.pushArbiterUnavailableWarning`)
+  const runArbiterQueue = action(async () => {
+    while (true) {
+      const runtime = arbiterRuntime()
+      const nextEntry = arbiterQueue()[0] ?? null
+
+      if (runtime === null || nextEntry === null) {
+        arbiterInFlight.set(null)
+        return null
+      }
+
+      const currentGame = peek(storedGameRecordAtom(gameId))
+
+      if (currentGame === null) {
+        arbiterInFlight.set(null)
+        return createMissingGameError(gameId)
+      }
+
+      const replayed = replayStoredGameRecord(currentGame, {
+        moveCount: nextEntry.moveIndex + 1,
+      })
+
+      if (replayed instanceof Error) {
+        console.warn(replayed)
+        const persisted = persistArbiterEvaluation({
+          moveIndex: nextEntry.moveIndex,
+          evaluation: null,
+        })
+
+        if (persisted instanceof Error) {
+          console.warn(persisted)
+        }
+
+        arbiterQueue.set(peek(arbiterQueue).slice(1))
+        arbiterInFlight.set(null)
+        continue
+      }
+
+      arbiterInFlight.set(nextEntry)
+
+      const controller = abortVar.first()
+
+      if (!controller) {
+        arbiterInFlight.set(null)
+        return null
+      }
+
+      const result = await wrap(
+        runtime.requestEvaluation({
+          snapshot: replayed.snapshot,
+          signal: controller.signal,
+        }),
+      )
+
+      const syncLocal = peek(snapshot) !== null && peek(phase) !== 'pending'
+
+      if (errore.isAbortError(result)) {
+        const persisted = persistArbiterEvaluation({
+          moveIndex: nextEntry.moveIndex,
+          evaluation: null,
+          syncLocal,
+        })
+
+        if (persisted instanceof Error) {
+          console.warn(persisted)
+        }
+
+        arbiterQueue.set(peek(arbiterQueue).slice(1))
+        arbiterInFlight.set(null)
+        return result
+      }
+
+      if (result instanceof Error) {
+        console.warn(result)
+        const persisted = persistArbiterEvaluation({
+          moveIndex: nextEntry.moveIndex,
+          evaluation: null,
+          syncLocal,
+        })
+
+        if (persisted instanceof Error) {
+          console.warn(persisted)
+        }
+
+        pushArbiterUnavailableWarning(result)
+        arbiterQueue.set(peek(arbiterQueue).slice(1))
+        arbiterInFlight.set(null)
+        continue
+      }
+
+      const persisted = persistArbiterEvaluation({
+        moveIndex: nextEntry.moveIndex,
+        evaluation: result,
+        syncLocal,
+      })
+
+      if (persisted instanceof Error) {
+        console.warn(persisted)
+      }
+
+      arbiterWarningShown.set(false)
+
+      if (
+        historyCursor() === latestMoveCount() &&
+        latestMoveCount() === nextEntry.moveIndex + 1
+      ) {
+        const createdAt = Date.now()
+        arbiterLiveComment.set({
+          id: createdAt,
+          side: getMoveSide(nextEntry.moveIndex),
+          text: result.comment,
+          createdAt,
+        })
+      }
+
+      arbiterQueue.set(peek(arbiterQueue).slice(1))
+      arbiterInFlight.set(null)
+    }
+  }, `${name}.runArbiterQueue`).extend(withAbort())
 
   const movableSquares = computed(() => {
     const currentEngine = engine()
@@ -894,6 +1204,8 @@ export function createGameModel({
     if (persisted instanceof Error) {
       return persisted
     }
+
+    queueArbiterEvaluation(nextSnapshot.history.length - 1)
 
     if (isTerminalStatus(nextSnapshot.status)) {
       phase.setGameOver()
@@ -1030,6 +1342,12 @@ export function createGameModel({
 
     startupBlockedConfigSignature.set(null)
     actors.set(nextActors)
+    arbiterRuntime.set(createConfiguredArbiter(currentGame.config.arbiter ?? null))
+    arbiterQueue.set([])
+    arbiterInFlight.set(null)
+    evaluationsByMove.set([...(currentGame.evaluations ?? [])])
+    arbiterLiveComment.set(null)
+    arbiterWarningShown.set(false)
     const restoredSnapshot = syncPositionFromHistory(currentGame.moves.length)
 
     if (restoredSnapshot instanceof Error) {
@@ -1087,6 +1405,11 @@ export function createGameModel({
 
     return () => clearInterval(intervalId)
   }, `${name}.turnElapsedTicker`)
+  effect(() => {
+    if (!isAtLatestMove() && peek(arbiterLiveComment) !== null) {
+      arbiterLiveComment.set(null)
+    }
+  }, `${name}.hideArbiterCommentOffTail`)
 
   const retryTurn = action(() => {
     if (phase() !== 'actorError' || !canContinueFromCurrentMove()) {
@@ -1303,6 +1626,9 @@ export function createGameModel({
     movableSquares,
     actorPanels,
     matchInfoEntries,
+    arbiterInfoEntry,
+    resolvedEvaluation,
+    arbiterLiveComment,
     activeActorControls,
     activeHumanActor,
     statusText,
@@ -1318,6 +1644,7 @@ export function createGameModel({
     pendingPromotion,
     resolvePromotion,
     cancelPromotion,
+    dismissArbiterLiveComment,
     leaveMatch,
     openGames,
     dispose,

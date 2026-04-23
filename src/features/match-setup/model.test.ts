@@ -4,6 +4,10 @@ import { DEFAULT_OPENAI_REASONING_EFFORT } from '@/actors/ai-actor/open-ai'
 import { createDefaultSideConfig } from '@/actors/registry'
 import type { MatchConfig } from '@/actors/registry'
 import {
+  clearStoredArbiterConfigMap,
+  loadStoredArbiterConfig,
+} from '@/shared/storage/arbiterConfigStorage'
+import {
   clearStoredActorConfigMap,
   loadStoredActorConfig,
 } from '@/shared/storage/actorConfigStorage'
@@ -38,6 +42,7 @@ function getLoadedConfig(): MatchConfig {
 
 describe('createMatchSetupModel', () => {
   beforeEach(() => {
+    clearStoredArbiterConfigMap()
     clearStoredActorConfigMap()
     storedMatchConfig.clear()
     clearStoredGameArchive()
@@ -131,6 +136,7 @@ describe('createMatchSetupModel', () => {
     const initialConfig: MatchConfig = {
       white: createDefaultSideConfig('human'),
       black: createDefaultSideConfig('human'),
+      arbiter: null,
     }
 
     const model = createMatchSetupModel({
@@ -157,6 +163,65 @@ describe('createMatchSetupModel', () => {
         moves: [],
       }),
     )
+  })
+
+  it('blocks start when the selected arbiter provider has no vault secret', async () => {
+    const goToGame = vi.fn()
+    const model = createMatchSetupModel({
+      name: `test-setup-${crypto.randomUUID()}`,
+      initialConfig: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+        arbiter: {
+          arbiterKey: 'openai',
+          arbiterConfig: {
+            model: 'gpt-5-nano',
+          },
+        },
+      },
+      goToGame,
+      goToGames: vi.fn(),
+    })
+
+    const result = await model.startMatch()
+
+    expect(result).toBeInstanceOf(Error)
+    expect(model.setupError()).toBeInstanceOf(Error)
+    expect(model.canStart()).toBe(false)
+    expect(goToGame).not.toHaveBeenCalled()
+  })
+
+  it('persists arbiter config into match storage and arbiter defaults on successful start', async () => {
+    await setupTestVault({
+      openai: 'sk-arbiter',
+    })
+
+    const goToGame = vi.fn()
+    const initialConfig: MatchConfig = {
+      white: createDefaultSideConfig('human'),
+      black: createDefaultSideConfig('human'),
+      arbiter: {
+        arbiterKey: 'openai',
+        arbiterConfig: {
+          model: 'gpt-5-nano',
+        },
+      },
+    }
+
+    const model = createMatchSetupModel({
+      name: `test-setup-${crypto.randomUUID()}`,
+      initialConfig,
+      goToGame,
+      goToGames: vi.fn(),
+    })
+
+    const result = await model.startMatch()
+
+    expect(result).toBeNull()
+    expect(loadStoredMatchConfig()).toEqual(initialConfig)
+    expect(loadStoredArbiterConfig('openai')).toEqual({
+      model: 'gpt-5-nano',
+    })
   })
 
   it('keeps shared actor config synchronized between both sides', async () => {
