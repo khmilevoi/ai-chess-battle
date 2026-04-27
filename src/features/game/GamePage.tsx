@@ -252,7 +252,7 @@ export const GamePage = reatomMemo(({
   const matchInfoEntries = model.matchInfoEntries()
   const arbiterInfoEntry = model.arbiterInfoEntry()
   const resolvedEvaluation = model.resolvedEvaluation()
-  const arbiterLiveComment = model.arbiterLiveComment()
+  const currentMoveEvaluating = model.currentMoveEvaluating()
   const hasActorControls = actorPanels.some((actorPanel) => actorPanel.hasControls)
   const controlsNotice = getActorControlsNotice({
     isAtLatestMove: model.isAtLatestMove,
@@ -392,12 +392,15 @@ export const GamePage = reatomMemo(({
             ].join(' ')}
           >
             {arbiterInfoEntry ? (
-              <EvalBar evaluation={resolvedEvaluation} />
+              <EvalBar evaluation={resolvedEvaluation?.evaluation ?? null} />
             ) : null}
 
             <section className={styles.boardStack}>
               {arbiterInfoEntry ? (
-                <ArbiterToastLayer comment={arbiterLiveComment} />
+                <ArbiterToastLayer
+                  evaluation={resolvedEvaluation}
+                  evaluating={currentMoveEvaluating}
+                />
               ) : null}
 
               <section className={styles.boardPanel}>
