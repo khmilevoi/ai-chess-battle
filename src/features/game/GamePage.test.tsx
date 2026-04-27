@@ -436,8 +436,8 @@ describe('GamePage', () => {
     })
 
     const { container } = render(<GamePage model={model} />)
-    const boardStack = container.querySelector(`.${styles.boardStack}`)
-    const boardPanel = container.querySelector(`.${styles.boardPanel}`)
+    const boardStack = container.querySelector<HTMLElement>(`.${styles.boardStack}`)
+    const boardPanel = container.querySelector<HTMLElement>(`.${styles.boardPanel}`)
 
     if (!boardStack || !boardPanel) {
       throw new Error('Expected the board stack and board panel to render.')
@@ -454,6 +454,10 @@ describe('GamePage', () => {
     await waitFor(() => {
       expect(resolveEvaluation).not.toBeNull()
     })
+    expect(within(boardStack).getByRole('status')).toHaveAttribute(
+      'aria-label',
+      'Arbiter evaluation ticker (evaluating now)',
+    )
 
     const completeEvaluation: (value: { score: number; comment: string }) => void =
       resolveEvaluation ??
@@ -469,11 +473,21 @@ describe('GamePage', () => {
     await waitFor(() => {
       const ticker = within(boardStack).getByRole('status')
       expect(ticker.textContent).toContain('White opens with purpose.')
+      expect(ticker).toHaveAttribute('aria-label', 'Arbiter evaluation ticker')
       expect(boardStack.firstElementChild).toBe(ticker)
       expect(ticker.nextElementSibling).toBe(boardPanel)
     })
 
     model.goToMove(0)
+
+    await waitFor(() => {
+      const ticker = within(boardStack).getByRole('status')
+      expect(ticker.textContent).toContain('Arbiter online. Awaiting the next move.')
+      expect(boardStack.firstElementChild).toBe(ticker)
+      expect(ticker.nextElementSibling).toBe(boardPanel)
+    })
+
+    model.goToMove(1)
 
     await waitFor(() => {
       const ticker = within(boardStack).getByRole('status')

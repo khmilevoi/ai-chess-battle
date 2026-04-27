@@ -5,20 +5,19 @@ import { ArbiterToastLayer } from './ArbiterToastLayer'
 
 const IDLE_TICKER_TEXT = 'Arbiter online. Awaiting the next move.'
 
-function createComment(
+function createResolvedEvaluation(
   overrides: Partial<{
-    id: number
-    side: 'white' | 'black'
-    text: string
-    createdAt: number
+    score: number
+    comment: string
+    moveIndex: number
   }> = {},
 ) {
   return {
-    id: 1,
-    side: 'white' as const,
-    text: 'White opens with purpose.',
-    createdAt: 1,
-    ...overrides,
+    evaluation: {
+      score: overrides.score ?? 32,
+      comment: overrides.comment ?? 'White opens with purpose.',
+    },
+    moveIndex: overrides.moveIndex ?? 0,
   }
 }
 
@@ -66,7 +65,9 @@ describe('ArbiterToastLayer', () => {
   })
 
   it('renders a persistent placeholder ticker when no comment is available yet', () => {
-    const { container } = render(<ArbiterToastLayer comment={null} />)
+    const { container } = render(
+      <ArbiterToastLayer evaluation={null} evaluating={false} />,
+    )
     const status = screen.getByRole('status')
     const duplicateText = container.querySelector('[aria-hidden="true"]')
 
@@ -74,17 +75,19 @@ describe('ArbiterToastLayer', () => {
     expect(screen.getAllByText(IDLE_TICKER_TEXT)).toHaveLength(2)
     expect(container.querySelector(`.${styles.track}`)).not.toBeNull()
     expect(container.querySelector(`.${styles.idle}`)).not.toBeNull()
+    expect(container.querySelector(`.${styles.statusDot}`)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Dismiss arbiter comment' })).toBeNull()
     expect(duplicateText?.textContent).toBe(IDLE_TICKER_TEXT)
   })
 
-  it('renders the live comment in the ticker and remounts the track for a new comment id', () => {
+  it('renders the resolved evaluation in the ticker and remounts the track for a new move index', () => {
     const { container, rerender } = render(
       <ArbiterToastLayer
-        comment={createComment({
-          id: 1,
-          text: 'White opens with purpose.',
+        evaluation={createResolvedEvaluation({
+          moveIndex: 0,
+          comment: 'White opens with purpose.',
         })}
+        evaluating={false}
       />,
     )
 
@@ -92,14 +95,15 @@ describe('ArbiterToastLayer', () => {
 
     expect(screen.getAllByText('White opens with purpose.')).toHaveLength(2)
     expect(container.querySelector(`.${styles.whiteMove}`)).not.toBeNull()
+    expect(container.querySelector(`.${styles.statusDot}`)).toBeNull()
 
     rerender(
       <ArbiterToastLayer
-        comment={createComment({
-          id: 2,
-          side: 'black',
-          text: 'Black hits the center in reply.',
+        evaluation={createResolvedEvaluation({
+          moveIndex: 1,
+          comment: 'Black hits the center in reply.',
         })}
+        evaluating={false}
       />,
     )
 
@@ -110,16 +114,34 @@ describe('ArbiterToastLayer', () => {
     expect(secondTrack).not.toBe(firstTrack)
   })
 
+  it('shows an evaluating indicator next to the arbiter label', () => {
+    const { container } = render(
+      <ArbiterToastLayer
+        evaluation={createResolvedEvaluation()}
+        evaluating={true}
+      />,
+    )
+    const status = screen.getByRole('status')
+
+    expect(container.querySelector(`.${styles.statusDot}`)).not.toBeNull()
+    expect(status).toHaveAttribute(
+      'aria-label',
+      'Arbiter evaluation ticker (evaluating now)',
+    )
+  })
+
   it('disables the marquee duplicate for reduced motion', () => {
-    const comment = createComment()
+    const evaluation = createResolvedEvaluation()
     stubMatchMedia(true)
-    const { container } = render(<ArbiterToastLayer comment={comment} />)
+    const { container } = render(
+      <ArbiterToastLayer evaluation={evaluation} evaluating={false} />,
+    )
 
     const status = screen.getByRole('status')
     const duplicateText = container.querySelector(`.${styles.duplicateText}`)
 
     expect(status.className).toContain(styles.reducedMotion)
-    expect(screen.getAllByText(comment.text)).toHaveLength(1)
+    expect(screen.getAllByText(evaluation.evaluation.comment)).toHaveLength(1)
     expect(duplicateText).toBeNull()
   })
 })

@@ -80,14 +80,37 @@ function createSavedGame({
   config,
   actorControls = {},
   moves = [],
+  evaluations,
 }: {
   config: MatchConfig
   actorControls?: StoredGameActorControls
   moves?: Array<string>
+  evaluations?: Parameters<typeof createStoredGame>[0]['evaluations']
 }) {
-  const game = createRequiredStoredGame({ config, actorControls, moves })
+  const game = createRequiredStoredGame({ config, actorControls, moves, evaluations })
   setActiveGameId(game.id)
   return game
+}
+
+function getRequestedArbiterMoveNumbers() {
+  return vi.mocked(openAiProvider.callOpenAi).mock.calls.map(([params]) => {
+    const payload = JSON.parse(params.user) as { moveNumber: number }
+
+    return payload.moveNumber
+  })
+}
+
+function createHumanArbiterConfig(): MatchConfig {
+  return {
+    white: createDefaultSideConfig('human'),
+    black: createDefaultSideConfig('human'),
+    arbiter: {
+      arbiterKey: 'openai',
+      arbiterConfig: {
+        model: 'gpt-5-nano',
+      },
+    },
+  }
 }
 
 describe('createGameModel', () => {
@@ -760,7 +783,142 @@ describe('createGameModel', () => {
     })
   })
 
-  it('queues arbiter evaluations after persisted moves and stores the live comment', async () => {
+  it('resolves the latest non-null evaluation at or before the current cursor', async () => {
+    const firstEvaluation = {
+      score: 18,
+      comment: 'White claims the center.',
+    }
+    const thirdEvaluation = {
+      score: 42,
+      comment: 'White develops with tempo.',
+    }
+    const game = createSavedGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+      },
+      moves: ['e2e4', 'e7e5', 'g1f3'],
+      evaluations: [firstEvaluation, null, thirdEvaluation],
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+
+    expect(model.resolvedEvaluation()).toEqual({
+      evaluation: thirdEvaluation,
+      moveIndex: 2,
+    })
+
+    model.goToMove(2)
+    await flush(2)
+
+    expect(model.resolvedEvaluation()).toEqual({
+      evaluation: firstEvaluation,
+      moveIndex: 0,
+    })
+
+    model.goToMove(0)
+    await flush(2)
+
+    expect(model.resolvedEvaluation()).toBeNull()
+  })
+
+  it('requests a missing evaluation when the cursor visits that move', async () => {
+    vi.spyOn(openAiProvider, 'callOpenAi').mockImplementation(
+      () => new Promise(() => {}),
+    )
+
+    const game = createSavedGame({
+      config: createHumanArbiterConfig(),
+      moves: ['e2e4', 'e7e5'],
+      evaluations: [
+        null,
+        {
+          score: -12,
+          comment: 'Black mirrors the center.',
+        },
+      ],
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+    await flush(2)
+
+    expect(openAiProvider.callOpenAi).not.toHaveBeenCalled()
+
+    model.goToMove(1)
+    await waitForCondition(() => vi.mocked(openAiProvider.callOpenAi).mock.calls.length === 1)
+
+    expect(getRequestedArbiterMoveNumbers()).toEqual([1])
+
+    model.goToMove(2)
+    await flush(2)
+
+    expect(getRequestedArbiterMoveNumbers()).toEqual([1])
+  })
+
+  it('dedupes cursor-driven arbiter requests while a move is queued or in-flight', async () => {
+    const pendingResponses: Array<(value: { score: number; comment: string }) => void> = []
+    vi.spyOn(openAiProvider, 'callOpenAi').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          pendingResponses.push(resolve)
+        }),
+    )
+
+    const game = createSavedGame({
+      config: createHumanArbiterConfig(),
+      moves: ['e2e4', 'e7e5'],
+      evaluations: [null, null],
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+    await waitForCondition(() => vi.mocked(openAiProvider.callOpenAi).mock.calls.length === 1)
+
+    model.goToMove(1)
+    await flush(2)
+    model.goToMove(2)
+    await flush(2)
+    model.goToMove(1)
+    await flush(2)
+
+    expect(getRequestedArbiterMoveNumbers()).toEqual([2])
+
+    pendingResponses[0]?.({
+      score: -20,
+      comment: 'Black has equalized.',
+    })
+    await waitForCondition(() => vi.mocked(openAiProvider.callOpenAi).mock.calls.length === 2)
+
+    pendingResponses[1]?.({
+      score: 16,
+      comment: 'White starts actively.',
+    })
+    await waitForCondition(
+      () => peek(storedGameRecordAtom(game.id))?.evaluations?.[0]?.score === 16,
+    )
+    await flush(4)
+
+    expect(getRequestedArbiterMoveNumbers()).toEqual([2, 1])
+  })
+
+  it('queues arbiter evaluations after persisted moves through the cursor effect', async () => {
     let resolveEvaluation: ((value: { score: number; comment: string }) => void) | null = null
     vi.spyOn(openAiProvider, 'callOpenAi').mockImplementation(
       () =>
@@ -770,16 +928,7 @@ describe('createGameModel', () => {
     )
 
     const game = createSavedGame({
-      config: {
-        white: createDefaultSideConfig('human'),
-        black: createDefaultSideConfig('human'),
-        arbiter: {
-          arbiterKey: 'openai',
-          arbiterConfig: {
-            model: 'gpt-5-nano',
-          },
-        },
-      },
+      config: createHumanArbiterConfig(),
     })
     const model = createGameModel({
       name: `test-game-${crypto.randomUUID()}`,
@@ -796,6 +945,8 @@ describe('createGameModel', () => {
 
     const updatedAtAfterMove = peek(storedGameRecordAtom(game.id))?.updatedAt ?? null
     expect(resolveEvaluation).not.toBeNull()
+    expect(model.currentMoveEvaluating()).toBe(true)
+    expect(getRequestedArbiterMoveNumbers()).toEqual([1])
 
     const completeEvaluation: (value: { score: number; comment: string }) => void =
       resolveEvaluation ??
@@ -812,12 +963,19 @@ describe('createGameModel', () => {
       () => peek(storedGameRecordAtom(game.id))?.evaluations?.[0]?.score === 32,
     )
 
-    expect(model.resolvedEvaluation()?.score).toBe(32)
-    expect(model.arbiterLiveComment()?.text).toBe('White opens with purpose.')
+    expect(model.resolvedEvaluation()).toEqual({
+      evaluation: {
+        score: 32,
+        comment: 'White opens with purpose.',
+      },
+      moveIndex: 0,
+    })
+    expect(model.currentMoveEvaluating()).toBe(false)
     expect(peek(storedGameRecordAtom(game.id))?.updatedAt).toBe(updatedAtAfterMove)
   })
 
   it('persists null when an arbiter evaluation fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(openAiProvider, 'callOpenAi').mockRejectedValue(
       new openAiProvider.OpenAiTransportError({
         operation: 'request',
@@ -826,16 +984,7 @@ describe('createGameModel', () => {
     )
 
     const game = createSavedGame({
-      config: {
-        white: createDefaultSideConfig('human'),
-        black: createDefaultSideConfig('human'),
-        arbiter: {
-          arbiterKey: 'openai',
-          arbiterConfig: {
-            model: 'gpt-5-nano',
-          },
-        },
-      },
+      config: createHumanArbiterConfig(),
     })
     const model = createGameModel({
       name: `test-game-${crypto.randomUUID()}`,
@@ -854,10 +1003,11 @@ describe('createGameModel', () => {
     )
 
     expect(model.resolvedEvaluation()).toBeNull()
-    expect(model.arbiterLiveComment()).toBeNull()
+    await waitForCondition(() => !model.currentMoveEvaluating())
+    expect(model.currentMoveEvaluating()).toBe(false)
   })
 
-  it('reactively rebuilds the arbiter after the vault unlocks during a playing game', async () => {
+  it('retries a missing current-cursor evaluation when the vault unlocks', async () => {
     lockVault()
 
     let resolveEvaluation: ((value: { score: number; comment: string }) => void) | null = null
@@ -869,14 +1019,9 @@ describe('createGameModel', () => {
     )
 
     const game = createSavedGame({
-      config: {
-        white: createDefaultSideConfig('human'),
-        black: createDefaultSideConfig('human'),
-        arbiter: {
-          arbiterKey: 'openai',
-          arbiterConfig: { model: 'gpt-5-nano' },
-        },
-      },
+      config: createHumanArbiterConfig(),
+      moves: ['e2e4'],
+      evaluations: [null],
     })
     const model = createGameModel({
       name: `test-game-${crypto.randomUUID()}`,
@@ -890,31 +1035,73 @@ describe('createGameModel', () => {
     expect(model.phase()).toBe('playing')
 
     // Move 1: arbiter is unavailable stub (vault locked) → null evaluation
-    model.clickSquare('e2')
-    model.clickSquare('e4')
-
-    await waitForCondition(
-      () => peek(storedGameRecordAtom(game.id))?.evaluations?.[0] === null,
-    )
-
     expect(openAiProvider.callOpenAi).not.toHaveBeenCalled()
+    expect(model.currentMoveEvaluating()).toBe(false)
 
     // Unlock vault → refreshArbiterOnVaultChange effect fires → arbiter rebuilt with real key
     expect(await unlockVault(TEST_MASTER_PASSWORD)).toBeNull()
-    await flush(2)
+    await waitForCondition(() => vi.mocked(openAiProvider.callOpenAi).mock.calls.length === 1)
+    expect(getRequestedArbiterMoveNumbers()).toEqual([1])
+    expect(model.currentMoveEvaluating()).toBe(true)
 
     // Move 2: real arbiter now active → provider is called
-    model.clickSquare('e7')
-    model.clickSquare('e5')
-    await flush(2)
-
     expect(resolveEvaluation).not.toBeNull()
-    resolveEvaluation!({ score: 64, comment: 'Black mirrors the center.' })
+    resolveEvaluation!({ score: 64, comment: 'White starts cleanly.' })
 
     await waitForCondition(
-      () => peek(storedGameRecordAtom(game.id))?.evaluations?.[1]?.score === 64,
+      () => peek(storedGameRecordAtom(game.id))?.evaluations?.[0]?.score === 64,
     )
 
-    expect(peek(storedGameRecordAtom(game.id))?.evaluations?.[1]?.score).toBe(64)
+    expect(model.currentMoveEvaluating()).toBe(false)
+  })
+
+  it('reports evaluating only for the cursor current move', async () => {
+    let resolveEvaluation: ((value: { score: number; comment: string }) => void) | null = null
+    vi.spyOn(openAiProvider, 'callOpenAi').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveEvaluation = resolve
+        }),
+    )
+
+    const game = createSavedGame({
+      config: createHumanArbiterConfig(),
+      moves: ['e2e4', 'e7e5'],
+      evaluations: [
+        null,
+        {
+          score: -14,
+          comment: 'Black answers symmetrically.',
+        },
+      ],
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    expect(await model.startMatch()).toBeNull()
+
+    model.goToMove(1)
+    await waitForCondition(() => vi.mocked(openAiProvider.callOpenAi).mock.calls.length === 1)
+
+    expect(model.currentMoveEvaluating()).toBe(true)
+
+    model.goToMove(2)
+    await flush(2)
+
+    expect(model.currentMoveEvaluating()).toBe(false)
+
+    resolveEvaluation!({
+      score: 22,
+      comment: 'White builds pressure.',
+    })
+    await waitForCondition(
+      () => peek(storedGameRecordAtom(game.id))?.evaluations?.[0]?.score === 22,
+    )
+
+    expect(model.currentMoveEvaluating()).toBe(false)
   })
 })

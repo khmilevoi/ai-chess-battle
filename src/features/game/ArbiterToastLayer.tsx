@@ -1,13 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { BoardSnapshot } from '@/domain/chess/types'
+import { getMoveSide, type ResolvedEvaluation } from './model'
 import styles from './ArbiterToastLayer.module.css'
-
-type ArbiterLiveComment = {
-  id: number
-  side: BoardSnapshot['turn']
-  text: string
-  createdAt: number
-}
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 const IDLE_TICKER_TEXT = 'Arbiter online. Awaiting the next move.'
@@ -21,14 +14,22 @@ function getInitialReducedMotionPreference() {
 }
 
 export function ArbiterToastLayer({
-  comment,
+  evaluation,
+  evaluating,
 }: {
-  comment: ArbiterLiveComment | null
+  evaluation: ResolvedEvaluation | null
+  evaluating: boolean
 }) {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
     getInitialReducedMotionPreference,
   )
-  const tickerText = comment?.text ?? IDLE_TICKER_TEXT
+  const tickerText = evaluation?.evaluation.comment ?? IDLE_TICKER_TEXT
+  const sideClass =
+    evaluation === null
+      ? styles.idle
+      : getMoveSide(evaluation.moveIndex) === 'white'
+      ? styles.whiteMove
+      : styles.blackMove
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') {
@@ -39,8 +40,6 @@ export function ArbiterToastLayer({
     const handleChange = (event: MediaQueryListEvent) => {
       setPrefersReducedMotion(event.matches)
     }
-
-    setPrefersReducedMotion(mediaQuery.matches)
 
     if (typeof mediaQuery.addEventListener === 'function') {
       mediaQuery.addEventListener('change', handleChange)
@@ -61,21 +60,23 @@ export function ArbiterToastLayer({
     <article
       className={[
         styles.toast,
-        comment === null
-          ? styles.idle
-          : comment.side === 'white'
-          ? styles.whiteMove
-          : styles.blackMove,
+        sideClass,
         prefersReducedMotion ? styles.reducedMotion : '',
       ].join(' ')}
       role="status"
       aria-live="polite"
       aria-atomic="true"
+      aria-label={`Arbiter evaluation ticker${evaluating ? ' (evaluating now)' : ''}`}
     >
-      <p className={styles.label}>Arbiter</p>
+      <p className={styles.label}>
+        Arbiter
+        {evaluating ? (
+          <span className={styles.statusDot} aria-hidden="true" />
+        ) : null}
+      </p>
 
       <div className={styles.viewport}>
-        <div key={comment?.id ?? 'idle'} className={styles.track}>
+        <div key={evaluation?.moveIndex ?? 'idle'} className={styles.track}>
           <p className={styles.text}>{tickerText}</p>
           {prefersReducedMotion ? null : (
             <p className={[styles.text, styles.duplicateText].join(' ')} aria-hidden="true">

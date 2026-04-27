@@ -39,7 +39,7 @@ import {
   updateStoredGameRecord,
   type StoredGameActorControls,
 } from '@/shared/storage/gameSessionStorage'
-import { vaultSecretsAtom } from '@/shared/storage/credentialVault'
+import { vaultSecretsAtom, vaultStatusAtom } from '@/shared/storage/credentialVault'
 import { CredentialError, StorageError, TurnCancelledError } from '@/shared/errors'
 
 type SideActors = Record<
@@ -97,13 +97,6 @@ type ArbiterQueueEntry = {
   moveIndex: number
 }
 
-type ArbiterLiveComment = {
-  id: number
-  side: BoardSnapshot['turn']
-  text: string
-  createdAt: number
-}
-
 type GameStatusTone = 'neutral' | 'warning' | 'error' | 'success'
 
 export type GameStatusView = {
@@ -115,6 +108,11 @@ export type GameStatusView = {
   canRetry: boolean
   canAbort: boolean
   elapsedSeconds: number | null
+}
+
+export type ResolvedEvaluation = {
+  evaluation: Eval
+  moveIndex: number
 }
 
 type CreateGameModelOptions = {
@@ -249,7 +247,7 @@ function createMissingGameError(gameId: string): StorageError {
   })
 }
 
-function getMoveSide(moveIndex: number): BoardSnapshot['turn'] {
+export function getMoveSide(moveIndex: number): BoardSnapshot['turn'] {
   return moveIndex % 2 === 0 ? 'white' : 'black'
 }
 
@@ -309,10 +307,6 @@ export function createGameModel({
   const arbiterQueue = atom([] as Array<ArbiterQueueEntry>, `${name}.arbiterQueue`)
   const arbiterInFlight = atom<ArbiterQueueEntry | null>(null, `${name}.arbiterInFlight`)
   const evaluationsByMove = atom([] as Array<Eval | null>, `${name}.evaluationsByMove`)
-  const arbiterLiveComment = atom<ArbiterLiveComment | null>(
-    null,
-    `${name}.arbiterLiveComment`,
-  )
   const arbiterWarningShown = atom(false, `${name}.arbiterWarningShown`)
   const startupBlockedConfigSignature = atom<string | null>(
     null,
@@ -586,7 +580,7 @@ export function createGameModel({
       modelLabel,
     } satisfies ArbiterInfoEntry
   }, `${name}.arbiterInfoEntry`)
-  const resolvedEvaluation = computed(() => {
+  const resolvedEvaluation = computed<ResolvedEvaluation | null>(() => {
     const cursor = historyCursor()
 
     if (cursor === 0) {
@@ -599,7 +593,7 @@ export function createGameModel({
       const evaluation = currentEvaluations[index]
 
       if (evaluation !== null && evaluation !== undefined) {
-        return evaluation
+        return { evaluation, moveIndex: index }
       }
     }
 
@@ -803,7 +797,6 @@ export function createGameModel({
     arbiterQueue.set([])
     arbiterInFlight.set(null)
     evaluationsByMove.set([])
-    arbiterLiveComment.set(null)
     arbiterWarningShown.set(false)
     snapshot.set(null)
     historyCursor.set(0)
@@ -924,6 +917,15 @@ export function createGameModel({
 
       if (syncLocal) {
         const localEvaluations = [...peek(evaluationsByMove)]
+        const currentLocalEvaluation = localEvaluations[moveIndex]
+
+        if (
+          evaluation === null &&
+          (currentLocalEvaluation === null || currentLocalEvaluation === undefined)
+        ) {
+          return persisted
+        }
+
         localEvaluations[moveIndex] = evaluation
         evaluationsByMove.set(localEvaluations)
       }
@@ -932,12 +934,16 @@ export function createGameModel({
     },
     `${name}.persistArbiterEvaluation`,
   )
-  const dismissArbiterLiveComment = action(() => {
-    arbiterLiveComment.set(null)
-    return null
-  }, `${name}.dismissArbiterLiveComment`)
   const queueArbiterEvaluation = action((moveIndex: number) => {
     if (peek(arbiterRuntime) === null) {
+      return null
+    }
+
+    if (peek(arbiterInFlight)?.moveIndex === moveIndex) {
+      return null
+    }
+
+    if (peek(arbiterQueue).some((entry) => entry.moveIndex === moveIndex)) {
       return null
     }
 
@@ -945,11 +951,54 @@ export function createGameModel({
     arbiterQueue.set(nextQueue)
 
     if (peek(arbiterInFlight) === null) {
-      void runArbiterQueue()
+      abortVar.spawn(() => {
+        void runArbiterQueue()
+      })
     }
 
     return moveIndex
   }, `${name}.queueArbiterEvaluation`)
+  effect(() => {
+    const vaultStatus = vaultStatusAtom()
+
+    if (vaultStatus !== 'unlocked') {
+      return
+    }
+
+    const cursor = historyCursor()
+    const currentEvaluations = evaluationsByMove()
+
+    if (cursor === 0) {
+      return
+    }
+
+    const moveIndex = cursor - 1
+
+    if (
+      currentEvaluations[moveIndex] !== null &&
+      currentEvaluations[moveIndex] !== undefined
+    ) {
+      return
+    }
+
+    queueArbiterEvaluation(moveIndex)
+  }, `${name}.requestMissingEvaluation`)
+  const currentMoveEvaluating = computed(() => {
+    const cursor = historyCursor()
+
+    if (cursor === 0) {
+      return false
+    }
+
+    const moveIndex = cursor - 1
+    const inFlight = arbiterInFlight()
+
+    if (inFlight?.moveIndex === moveIndex) {
+      return true
+    }
+
+    return arbiterQueue().some((entry) => entry.moveIndex === moveIndex)
+  }, `${name}.currentMoveEvaluating`)
   const pushArbiterUnavailableWarning = action((error: Error) => {
     if (peek(arbiterWarningShown)) {
       return error
@@ -1068,23 +1117,10 @@ export function createGameModel({
 
       arbiterWarningShown.set(false)
 
-      if (
-        historyCursor() === latestMoveCount() &&
-        latestMoveCount() === nextEntry.moveIndex + 1
-      ) {
-        const createdAt = Date.now()
-        arbiterLiveComment.set({
-          id: createdAt,
-          side: getMoveSide(nextEntry.moveIndex),
-          text: result.comment,
-          createdAt,
-        })
-      }
-
       arbiterQueue.set(peek(arbiterQueue).slice(1))
       arbiterInFlight.set(null)
     }
-  }, `${name}.runArbiterQueue`).extend(withAbort())
+  }, `${name}.runArbiterQueue`).extend(withAbort('first-in-win'))
 
   const movableSquares = computed(() => {
     const currentEngine = engine()
@@ -1204,8 +1240,6 @@ export function createGameModel({
     if (persisted instanceof Error) {
       return persisted
     }
-
-    queueArbiterEvaluation(nextSnapshot.history.length - 1)
 
     if (isTerminalStatus(nextSnapshot.status)) {
       phase.setGameOver()
@@ -1346,7 +1380,6 @@ export function createGameModel({
     arbiterQueue.set([])
     arbiterInFlight.set(null)
     evaluationsByMove.set([...(currentGame.evaluations ?? [])])
-    arbiterLiveComment.set(null)
     arbiterWarningShown.set(false)
     const restoredSnapshot = syncPositionFromHistory(currentGame.moves.length)
 
@@ -1421,12 +1454,6 @@ export function createGameModel({
 
     return () => clearInterval(intervalId)
   }, `${name}.turnElapsedTicker`)
-  effect(() => {
-    if (!isAtLatestMove() && peek(arbiterLiveComment) !== null) {
-      arbiterLiveComment.set(null)
-    }
-  }, `${name}.hideArbiterCommentOffTail`)
-
   const retryTurn = action(() => {
     if (phase() !== 'actorError' || !canContinueFromCurrentMove()) {
       return null
@@ -1644,7 +1671,7 @@ export function createGameModel({
     matchInfoEntries,
     arbiterInfoEntry,
     resolvedEvaluation,
-    arbiterLiveComment,
+    currentMoveEvaluating,
     activeActorControls,
     activeHumanActor,
     statusText,
@@ -1660,7 +1687,6 @@ export function createGameModel({
     pendingPromotion,
     resolvePromotion,
     cancelPromotion,
-    dismissArbiterLiveComment,
     leaveMatch,
     openGames,
     dispose,
