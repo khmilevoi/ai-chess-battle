@@ -5,8 +5,19 @@ Date: 2026-04-27
 ## Goal
 
 Add an arbiter personality feature that controls how the arbiter describes moves.
-The initial release has one personality only, but the architecture should make
-future personalities a registry addition rather than a provider rewrite.
+The initial release exposes eight preset personalities:
+
+- Classic Arbiter
+- Toxic Arbiter
+- Stuffy Referee
+- Doomsday Arbiter
+- Deadpan Engine
+- Hype Commentator
+- Paranoid Arbiter
+- Medieval Court Arbiter
+
+All personalities must still produce the same arbiter JSON shape, and `comment`
+must remain one short sentence under 240 characters.
 
 ## Recommended Approach
 
@@ -35,10 +46,9 @@ Each personality entry should expose:
 - `description`
 - `instructions`
 
-The first personality can preserve the current behavior: a witty, friendly chess
-arbiter that responds with one compact sentence. The JSON response contract
-should remain separate from the personality text so all personalities still
-produce the same validated output shape.
+The registry should contain the approved preset personalities. The JSON response
+contract should remain separate from the personality text so all personalities
+still produce the same validated output shape.
 
 Update the arbiter config types so OpenAI, Anthropic, and Google arbiter configs
 include `personalityKey`. Update default config creation so every provider uses
@@ -58,9 +68,8 @@ Provider implementations should call the same helper with
 ## UI
 
 The arbiter configuration panel should add a `Personality` select below the
-existing provider model setting. For now it will contain one option. The select
-still matters because it establishes the state shape, validation path, and UI
-contract for future personalities.
+existing provider model setting. It should render the personality registry
+options so future roster changes stay data-driven.
 
 Changing the personality should update only `arbiterConfig.personalityKey` and
 preserve the selected model.
@@ -106,6 +115,5 @@ Add focused tests for:
 ## Out of Scope
 
 - User-authored custom prompt text.
-- Multiple personalities in the first implementation.
 - Provider-specific personalities.
 - Changing the arbiter response schema.
