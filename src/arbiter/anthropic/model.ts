@@ -20,7 +20,7 @@ export function createAnthropicArbiter({
         return await callAnthropic({
           apiKey,
           model: config.model,
-          system: buildArbiterInstructions(),
+          system: buildArbiterInstructions(config.personalityKey),
           user: buildArbiterPrompt({ snapshot }),
           schema: arbiterEvaluationSchema,
           signal,

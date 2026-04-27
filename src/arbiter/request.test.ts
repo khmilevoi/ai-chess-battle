@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_ARBITER_PERSONALITY_KEY } from './personalities'
 import { buildArbiterInstructions, buildArbiterPrompt, parseArbiterResponseJson } from './request'
 
 describe('arbiter request helpers', () => {
@@ -35,8 +36,13 @@ describe('arbiter request helpers', () => {
     })
   })
 
-  it('exposes the locked arbiter system prompt', () => {
-    expect(buildArbiterInstructions()).toContain('strict JSON')
-    expect(buildArbiterInstructions()).toContain('witty chess arbiter')
+  it('combines personality instructions with the locked JSON contract', () => {
+    const instructions = buildArbiterInstructions(DEFAULT_ARBITER_PERSONALITY_KEY)
+
+    expect(instructions).toContain('witty chess arbiter')
+    expect(instructions).toContain('one compact sentence')
+    expect(instructions).toContain('strict JSON')
+    expect(instructions).toContain('"score"')
+    expect(instructions).toContain('"comment"')
   })
 })

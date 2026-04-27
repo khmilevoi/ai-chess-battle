@@ -7,10 +7,11 @@ import {
   type MatchSideConfig,
   type RegisteredActor,
 } from '@/actors/registry'
-import type {
-  ArbiterProviderKey,
-  ArbiterSideConfig,
-} from '@/arbiter/types'
+import {
+  isArbiterKey,
+  normalizeStoredArbiterConfigValue,
+} from '@/arbiter/registry'
+import type { ArbiterSideConfig } from '@/arbiter/types'
 
 type StoredActorConfigFor<Key extends ActorKey> = [RegisteredActor<Key>['secretField']] extends [
   keyof ActorConfigMap[Key],
@@ -46,10 +47,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isArbiterKey(value: unknown): value is ArbiterProviderKey {
-  return value === 'openai' || value === 'anthropic' || value === 'google'
-}
-
 function normalizeStoredArbiterSide(
   value: unknown,
 ): StoredArbiterSideConfig | null {
@@ -57,15 +54,18 @@ function normalizeStoredArbiterSide(
     return null
   }
 
-  if (typeof value.arbiterConfig.model !== 'string' || value.arbiterConfig.model.length === 0) {
+  const normalizedConfig = normalizeStoredArbiterConfigValue(
+    value.arbiterKey,
+    value.arbiterConfig,
+  )
+
+  if (normalizedConfig === null) {
     return null
   }
 
   return {
     arbiterKey: value.arbiterKey,
-    arbiterConfig: {
-      model: value.arbiterConfig.model,
-    },
+    arbiterConfig: normalizedConfig,
   } as StoredArbiterSideConfig
 }
 

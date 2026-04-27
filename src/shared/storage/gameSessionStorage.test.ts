@@ -1,5 +1,6 @@
 import { peek } from '@reatom/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_ARBITER_PERSONALITY_KEY } from '@/arbiter/personalities'
 import { createDefaultSideConfig } from '@/actors/registry'
 import {
   activeGameIdAtom,
@@ -145,6 +146,7 @@ describe('gameSessionStorage', () => {
           arbiterKey: 'openai',
           arbiterConfig: {
             model: 'gpt-5-nano',
+            personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
           },
         },
       },
@@ -396,6 +398,7 @@ describe('gameSessionStorage', () => {
                   arbiterKey: 'openai',
                   arbiterConfig: {
                     model: 'gpt-5-nano',
+                    personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
                   },
                 },
               },

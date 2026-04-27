@@ -2,6 +2,8 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultSideConfig } from '@/actors/registry'
+import type { MatchConfig } from '@/actors/registry'
+import { DEFAULT_ARBITER_PERSONALITY_KEY } from '@/arbiter/personalities'
 import { setupTestVault } from '@/test/credentialVault'
 import { resetVault } from '@/shared/storage/credentialVault'
 import { MatchSetupPage } from './MatchSetupPage'
@@ -116,5 +118,51 @@ describe('MatchSetupPage', () => {
 
     expect(screen.getAllByText('API key').length).toBe(1)
     expect(screen.getAllByText('Model').length).toBeGreaterThan(0)
+    expect(screen.getByLabelText('Personality')).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText('Personality')).getByRole('option', {
+        name: 'Classic Arbiter',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('updates the arbiter personality without changing the selected model', async () => {
+    await setupTestVault({
+      openai: 'sk-arbiter',
+    })
+
+    const user = userEvent.setup()
+    const initialConfig = {
+      white: createDefaultSideConfig('human'),
+      black: createDefaultSideConfig('human'),
+      arbiter: {
+        arbiterKey: 'openai',
+        arbiterConfig: {
+          model: 'gpt-5-nano',
+          personalityKey: 'unknown',
+        },
+      },
+    } as unknown as MatchConfig
+    const model = createMatchSetupModel({
+      name: `match-setup-page-arbiter-personality-${crypto.randomUUID()}`,
+      initialConfig,
+      goToGame: vi.fn(),
+      goToGames: vi.fn(),
+    })
+
+    render(<MatchSetupPage model={model} />)
+
+    await user.selectOptions(
+      screen.getByLabelText('Personality'),
+      DEFAULT_ARBITER_PERSONALITY_KEY,
+    )
+
+    expect(model.arbiterSideConfig()).toEqual({
+      arbiterKey: 'openai',
+      arbiterConfig: {
+        model: 'gpt-5-nano',
+        personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
+      },
+    })
   })
 })

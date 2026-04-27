@@ -2,12 +2,13 @@ import { atom, peek, withLocalStorage } from '@reatom/core'
 import {
   getRegisteredArbiter,
   isArbiterKey,
+  normalizeStoredArbiterConfigValue,
   type ArbiterProviderKey,
 } from '@/arbiter/registry'
 import type { ArbiterSideConfig } from '@/arbiter/types'
 
 const STORAGE_KEY = 'ai-chess-battle.arbiter-configs'
-const STORAGE_VERSION = 'arbiter-configs@1'
+const STORAGE_VERSION = 'arbiter-configs@2'
 
 type StoredArbiterConfigMap = Partial<{
   [Key in ArbiterProviderKey]: Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig']
@@ -32,23 +33,41 @@ function normalizeStoredArbiterConfigMapValue(
     return {}
   }
 
-  const normalizedEntries: Array<[ArbiterProviderKey, { model: string }]> = []
+  const normalizedEntries: Array<
+    [ArbiterProviderKey, StoredArbiterConfigMap[ArbiterProviderKey]]
+  > = []
 
   for (const [key, config] of Object.entries(value)) {
-    if (!isArbiterKey(key) || !isRecord(config)) {
+    if (!isArbiterKey(key)) {
       continue
     }
 
-    const validation = getRegisteredArbiter(key).configSchema.safeParse(config)
+    const normalizedConfig = normalizeStoredArbiterConfigValue(key, config)
 
-    if (!validation.success) {
+    if (normalizedConfig === null) {
       continue
     }
 
-    normalizedEntries.push([key, validation.data])
+    normalizedEntries.push([key, normalizedConfig])
   }
 
   return Object.fromEntries(normalizedEntries) as StoredArbiterConfigMap
+}
+
+function readSnapshotFromStorage(): StoredArbiterConfigMap {
+  const rawSnapshot = window.localStorage.getItem(STORAGE_KEY)
+
+  if (rawSnapshot === null) {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(rawSnapshot) as unknown
+
+    return normalizeStoredArbiterConfigMapValue(getPersistSnapshotValue(parsed))
+  } catch {
+    return {}
+  }
 }
 
 const storedArbiterConfigMapAtom = atom<StoredArbiterConfigMap>(
@@ -72,21 +91,33 @@ const storedArbiterConfigMapAtom = atom<StoredArbiterConfigMap>(
 export function loadStoredArbiterConfig<Key extends ArbiterProviderKey>(
   arbiterKey: Key,
 ): Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig'] | null {
-  return (
-    storedArbiterConfigMapAtom()[arbiterKey] as
+  const configMap = storedArbiterConfigMapAtom()
+  const resolvedConfig =
+    (configMap[arbiterKey] as
       | Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig']
-      | undefined
-  ) ?? null
+      | undefined) ??
+    (Object.keys(configMap).length > 0 || window.localStorage.getItem(STORAGE_KEY) === null
+      ? undefined
+      : (readSnapshotFromStorage()[arbiterKey] as
+          | Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig']
+          | undefined))
+
+  return resolvedConfig ?? null
 }
 
 export function readStoredArbiterConfig<Key extends ArbiterProviderKey>(
   arbiterKey: Key,
 ): Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig'] | null {
-  return (
-    peek(storedArbiterConfigMapAtom)[arbiterKey] as
+  const configMap = peek(storedArbiterConfigMapAtom)
+  const resolvedConfig =
+    (configMap[arbiterKey] as
       | Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig']
-      | undefined
-  ) ?? null
+      | undefined) ??
+    (readSnapshotFromStorage()[arbiterKey] as
+      | Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig']
+      | undefined)
+
+  return resolvedConfig ?? null
 }
 
 export function saveStoredArbiterConfig<Key extends ArbiterProviderKey>(
