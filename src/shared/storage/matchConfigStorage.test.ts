@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { peek } from '@reatom/core'
 import { createDefaultMatchConfig } from '@/actors/registry'
+import { DEFAULT_ARBITER_PERSONALITY_KEY } from '@/arbiter/personalities'
 import { normalizeStoredMatchConfigSnapshotValue } from './helpers'
 import { loadStoredMatchConfig, storedMatchConfig } from './matchConfigStorage'
 
@@ -34,6 +35,7 @@ describe('matchConfigStorage', () => {
         arbiterKey: 'openai',
         arbiterConfig: {
           model: 'gpt-5-nano',
+          personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
         },
       },
     })
@@ -45,6 +47,7 @@ describe('matchConfigStorage', () => {
         arbiterKey: 'openai',
         arbiterConfig: {
           model: 'gpt-5-nano',
+          personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
         },
       },
     })
@@ -125,6 +128,47 @@ describe('matchConfigStorage', () => {
       black: { actorKey: 'human', actorConfig: {} },
       arbiter: null,
     })
+  })
+
+  it('backfills default personality on legacy arbiter snapshots', () => {
+    expect(
+      normalizeStoredMatchConfigSnapshotValue({
+        white: { actorKey: 'human', actorConfig: {} },
+        black: { actorKey: 'human', actorConfig: {} },
+        arbiter: {
+          arbiterKey: 'openai',
+          arbiterConfig: {
+            model: 'gpt-5-nano',
+          },
+        },
+      }),
+    ).toEqual({
+      white: { actorKey: 'human', actorConfig: {} },
+      black: { actorKey: 'human', actorConfig: {} },
+      arbiter: {
+        arbiterKey: 'openai',
+        arbiterConfig: {
+          model: 'gpt-5-nano',
+          personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
+        },
+      },
+    })
+  })
+
+  it('rejects legacy arbiter snapshots with unknown personalities', () => {
+    expect(
+      normalizeStoredMatchConfigSnapshotValue({
+        white: { actorKey: 'human', actorConfig: {} },
+        black: { actorKey: 'human', actorConfig: {} },
+        arbiter: {
+          arbiterKey: 'openai',
+          arbiterConfig: {
+            model: 'gpt-5-nano',
+            personalityKey: 'unknown',
+          },
+        },
+      }),
+    ).toBeNull()
   })
 
   it('clears persisted config through the semantic atom action', () => {

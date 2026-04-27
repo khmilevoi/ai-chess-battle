@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_OPENAI_REASONING_EFFORT } from '@/actors/ai-actor/open-ai'
 import { createDefaultSideConfig } from '@/actors/registry'
 import type { MatchConfig } from '@/actors/registry'
+import { DEFAULT_ARBITER_PERSONALITY_KEY } from '@/arbiter/personalities'
 import {
   clearStoredArbiterConfigMap,
   loadStoredArbiterConfig,
@@ -176,6 +177,7 @@ describe('createMatchSetupModel', () => {
           arbiterKey: 'openai',
           arbiterConfig: {
             model: 'gpt-5-nano',
+            personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
           },
         },
       },
@@ -204,6 +206,7 @@ describe('createMatchSetupModel', () => {
         arbiterKey: 'openai',
         arbiterConfig: {
           model: 'gpt-5-nano',
+          personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
         },
       },
     }
@@ -221,6 +224,7 @@ describe('createMatchSetupModel', () => {
     expect(loadStoredMatchConfig()).toEqual(initialConfig)
     expect(loadStoredArbiterConfig('openai')).toEqual({
       model: 'gpt-5-nano',
+      personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
     })
   })
 

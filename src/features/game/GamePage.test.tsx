@@ -5,6 +5,7 @@ import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_REASONING_EFFORT,
 } from '@/actors/ai-actor/open-ai'
+import { DEFAULT_ARBITER_PERSONALITY_KEY } from '@/arbiter/personalities'
 import { createDefaultSideConfig } from '@/actors/registry'
 import type { MatchConfig } from '@/actors/registry'
 import * as openAiProvider from '@/shared/ai-providers/openai'
@@ -362,6 +363,7 @@ describe('GamePage', () => {
           arbiterKey: 'openai',
           arbiterConfig: {
             model: 'gpt-5-nano',
+            personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
           },
         },
       },
@@ -430,6 +432,7 @@ describe('GamePage', () => {
           arbiterKey: 'openai',
           arbiterConfig: {
             model: 'gpt-5-nano',
+            personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
           },
         },
       },
@@ -439,7 +442,7 @@ describe('GamePage', () => {
     const boardStack = container.querySelector(`.${styles.boardStack}`)
     const boardPanel = container.querySelector(`.${styles.boardPanel}`)
 
-    if (!boardStack || !boardPanel) {
+    if (!(boardStack instanceof HTMLElement) || !(boardPanel instanceof HTMLElement)) {
       throw new Error('Expected the board stack and board panel to render.')
     }
 

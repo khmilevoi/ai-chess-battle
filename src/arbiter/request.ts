@@ -1,9 +1,21 @@
 import { arbiterEvaluationSchema } from './schema'
+import {
+  DEFAULT_ARBITER_PERSONALITY_KEY,
+  getArbiterPersonality,
+  type ArbiterPersonalityKey,
+} from './personalities'
 import type { Eval } from './types'
 import type { BoardSnapshot } from '@/domain/chess/types'
 
-export function buildArbiterInstructions() {
-  return 'You are a witty chess arbiter. After each move you receive a position and the move just played. Respond with strict JSON: { "score": <integer centipawns, positive favors white, negative favors black, clamped to [-1000, 1000]>, "comment": <one witty, friendly sentence under 240 characters, no markdown, no long analysis> }.'
+const ARBITER_JSON_CONTRACT =
+  'After each move you receive a position and the move just played. Respond with strict JSON: { "score": <integer centipawns, positive favors white, negative favors black, clamped to [-1000, 1000]>, "comment": <one commentary sentence under 240 characters> }.'
+
+export function buildArbiterInstructions(
+  personalityKey: ArbiterPersonalityKey = DEFAULT_ARBITER_PERSONALITY_KEY,
+) {
+  const personality = getArbiterPersonality(personalityKey)
+
+  return `${personality.instructions} ${ARBITER_JSON_CONTRACT}`
 }
 
 function getLastMoveSide(moveCount: number): BoardSnapshot['turn'] {

@@ -11,6 +11,10 @@ import {
   OPENAI_DEFAULT_ARBITER_MODEL,
   OPENAI_MODEL_OPTIONS,
 } from '@/shared/ai-providers/openai'
+import {
+  DEFAULT_ARBITER_PERSONALITY_KEY,
+  arbiterPersonalityKeySchema,
+} from './personalities'
 import { createAnthropicArbiter } from './anthropic'
 import { createGoogleArbiter } from './google'
 import { createOpenAiArbiter } from './openai'
@@ -30,6 +34,7 @@ type ArbiterValidationResult = {
 
 const arbiterConfigSchema = z.object({
   model: z.string().min(1, 'Model is required'),
+  personalityKey: arbiterPersonalityKeySchema,
 })
 
 export const arbiterRegistry = {
@@ -40,6 +45,7 @@ export const arbiterRegistry = {
     configSchema: arbiterConfigSchema,
     createDefaultConfig: () => ({
       model: OPENAI_DEFAULT_ARBITER_MODEL,
+      personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
     }),
     create: ({ apiKey, config }) =>
       createOpenAiArbiter({
@@ -54,6 +60,7 @@ export const arbiterRegistry = {
     configSchema: arbiterConfigSchema,
     createDefaultConfig: () => ({
       model: ANTHROPIC_DEFAULT_ARBITER_MODEL,
+      personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
     }),
     create: ({ apiKey, config }) =>
       createAnthropicArbiter({
@@ -68,6 +75,7 @@ export const arbiterRegistry = {
     configSchema: arbiterConfigSchema,
     createDefaultConfig: () => ({
       model: GOOGLE_DEFAULT_ARBITER_MODEL,
+      personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
     }),
     create: ({ apiKey, config }) =>
       createGoogleArbiter({
@@ -87,8 +95,12 @@ function normalizeFieldErrors(
   )
 }
 
-export function isArbiterKey(value: string): value is ArbiterProviderKey {
-  return value in arbiterRegistry
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function isArbiterKey(value: unknown): value is ArbiterProviderKey {
+  return typeof value === 'string' && value in arbiterRegistry
 }
 
 export function getRegisteredArbiter<Key extends ArbiterProviderKey>(
@@ -110,6 +122,26 @@ export function createDefaultArbiterConfig<Key extends ArbiterProviderKey>(
     arbiterKey,
     arbiterConfig: descriptor.createDefaultConfig(),
   } as Extract<ArbiterSideConfig, { arbiterKey: Key }>
+}
+
+export function normalizeStoredArbiterConfigValue<Key extends ArbiterProviderKey>(
+  arbiterKey: Key,
+  value: unknown,
+): Extract<ArbiterSideConfig, { arbiterKey: Key }>['arbiterConfig'] | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const candidate = {
+    ...value,
+    personalityKey:
+      value.personalityKey === undefined
+        ? DEFAULT_ARBITER_PERSONALITY_KEY
+        : value.personalityKey,
+  }
+  const validation = getRegisteredArbiter(arbiterKey).configSchema.safeParse(candidate)
+
+  return validation.success ? validation.data : null
 }
 
 export function validateArbiterSideConfig(

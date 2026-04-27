@@ -5,6 +5,7 @@ import {
   DEFAULT_OPENAI_REASONING_EFFORT,
   OpenAiActorRuntime,
 } from '@/actors/ai-actor/open-ai'
+import { DEFAULT_ARBITER_PERSONALITY_KEY } from '@/arbiter/personalities'
 import { createDefaultSideConfig } from '@/actors/registry'
 import type { MatchConfig } from '@/actors/registry'
 import * as openAiProvider from '@/shared/ai-providers/openai'
@@ -777,6 +778,7 @@ describe('createGameModel', () => {
           arbiterKey: 'openai',
           arbiterConfig: {
             model: 'gpt-5-nano',
+            personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
           },
         },
       },
@@ -833,6 +835,7 @@ describe('createGameModel', () => {
           arbiterKey: 'openai',
           arbiterConfig: {
             model: 'gpt-5-nano',
+            personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
           },
         },
       },
@@ -874,7 +877,10 @@ describe('createGameModel', () => {
         black: createDefaultSideConfig('human'),
         arbiter: {
           arbiterKey: 'openai',
-          arbiterConfig: { model: 'gpt-5-nano' },
+          arbiterConfig: {
+            model: 'gpt-5-nano',
+            personalityKey: DEFAULT_ARBITER_PERSONALITY_KEY,
+          },
         },
       },
     })
