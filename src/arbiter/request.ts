@@ -10,12 +10,15 @@ import type { BoardSnapshot } from '@/domain/chess/types'
 const ARBITER_JSON_CONTRACT =
   'After each move you receive a position and the move just played. Respond with strict JSON: { "score": <integer centipawns, positive favors white, negative favors black, clamped to [-1000, 1000]>, "comment": <one commentary sentence under 240 characters> }.'
 
+const ARBITER_COMMENT_CONSTRAINTS =
+  'The comment must be exactly one short sentence under 240 characters. Do not use markdown or long analysis.'
+
 export function buildArbiterInstructions(
   personalityKey: ArbiterPersonalityKey = DEFAULT_ARBITER_PERSONALITY_KEY,
 ) {
   const personality = getArbiterPersonality(personalityKey)
 
-  return `${personality.instructions} ${ARBITER_JSON_CONTRACT}`
+  return `${personality.instructions} ${ARBITER_COMMENT_CONSTRAINTS} ${ARBITER_JSON_CONTRACT}`
 }
 
 function getLastMoveSide(moveCount: number): BoardSnapshot['turn'] {
