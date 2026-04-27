@@ -407,7 +407,7 @@ describe('GamePage', () => {
     })
 
     const { container } = render(<GamePage model={model} />)
-    const boardStack = container.querySelector(`.${styles.boardStack}`)
+    const boardStack = container.querySelector<HTMLElement>(`.${styles.boardStack}`)
 
     expect(screen.queryByLabelText('Evaluation bar')).toBeNull()
     expect(boardStack?.querySelector('[role="status"]')).toBeNull()
@@ -436,8 +436,8 @@ describe('GamePage', () => {
     })
 
     const { container } = render(<GamePage model={model} />)
-    const boardStack = container.querySelector(`.${styles.boardStack}`)
-    const boardPanel = container.querySelector(`.${styles.boardPanel}`)
+    const boardStack = container.querySelector<HTMLElement>(`.${styles.boardStack}`)
+    const boardPanel = container.querySelector<HTMLElement>(`.${styles.boardPanel}`)
 
     if (!boardStack || !boardPanel) {
       throw new Error('Expected the board stack and board panel to render.')
