@@ -289,26 +289,45 @@
 }
 
 .boardZone {
+  --board-eval-bar-width: 22px;
+  --board-shell-gap: var(--space-3);
+  --board-stack-gap: var(--space-2);
+  --board-ticker-height: 48px;
+  container-type: size;
   display: grid;
-  align-items: center;
+  align-items: start;
+  justify-items: center;
   min-width: 0;
   min-height: 0;
 }
 
 .boardShell {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto;
   gap: var(--space-3);
   align-items: stretch;
+  width: fit-content;
   max-width: 100%;
+  max-height: 100%;
   min-width: 0;
+}
+
+.boardShellWithArbiter {
+  grid-template-columns: auto auto;
 }
 
 .boardStack {
   display: grid;
   gap: var(--space-2);
-  width: min(100%, calc(100dvh - 150px), calc(100vw - var(--shell-padding, 48px) * 2), 600px);
+  width: min(100cqw, 100cqh);
   min-width: 0;
+}
+
+.boardShellWithArbiter .boardStack {
+  width: min(
+    max(0px, calc(100cqw - var(--board-eval-bar-width) - var(--board-shell-gap))),
+    max(0px, calc(100cqh - var(--board-ticker-height) - var(--board-stack-gap)))
+  );
 }
 
 .boardPanel {
@@ -679,6 +698,8 @@
 
   .boardZone {
     order: 1;
+    container-type: inline-size;
+    justify-items: stretch;
   }
 
   .leftRail {
@@ -697,11 +718,19 @@
   }
 
   .boardStack {
-    width: min(100%, 720px);
+    width: 100%;
+  }
+
+  .boardShellWithArbiter .boardStack {
+    width: 100%;
   }
 
   .boardShell {
-    width: min(100%, 720px);
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .boardShellWithArbiter {
     grid-template-columns: 1fr;
   }
 

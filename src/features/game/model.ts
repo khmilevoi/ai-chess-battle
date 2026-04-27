@@ -1384,6 +1384,22 @@ export function createGameModel({
   }, `${name}.retryStartupOnCredentialChange`)
 
   effect(() => {
+    vaultSecretsAtom()
+    const currentPhase = phase()
+
+    if (currentPhase !== 'playing') return
+
+    const currentGame = peek(storedGameRecordAtom(gameId))
+    if (currentGame === null) return
+
+    const arbiterConfig = currentGame.config.arbiter ?? null
+    if (arbiterConfig === null) return
+
+    arbiterRuntime.set(createConfiguredArbiter(arbiterConfig))
+    arbiterWarningShown.set(false)
+  }, `${name}.refreshArbiterOnVaultChange`)
+
+  effect(() => {
     const activity = turnActivity()
     const isAiTurn = activity === 'awaitingActor' && peek(activeHumanActor) === null
 

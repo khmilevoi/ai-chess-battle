@@ -856,4 +856,65 @@ describe('createGameModel', () => {
     expect(model.resolvedEvaluation()).toBeNull()
     expect(model.arbiterLiveComment()).toBeNull()
   })
+
+  it('reactively rebuilds the arbiter after the vault unlocks during a playing game', async () => {
+    lockVault()
+
+    let resolveEvaluation: ((value: { score: number; comment: string }) => void) | null = null
+    vi.spyOn(openAiProvider, 'callOpenAi').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveEvaluation = resolve
+        }),
+    )
+
+    const game = createSavedGame({
+      config: {
+        white: createDefaultSideConfig('human'),
+        black: createDefaultSideConfig('human'),
+        arbiter: {
+          arbiterKey: 'openai',
+          arbiterConfig: { model: 'gpt-5-nano' },
+        },
+      },
+    })
+    const model = createGameModel({
+      name: `test-game-${crypto.randomUUID()}`,
+      gameId: game.id,
+      leaveToSetup: vi.fn(),
+      leaveToGames: vi.fn(),
+    })
+
+    // Actors are human — game starts even with vault locked
+    expect(await model.startMatch()).toBeNull()
+    expect(model.phase()).toBe('playing')
+
+    // Move 1: arbiter is unavailable stub (vault locked) → null evaluation
+    model.clickSquare('e2')
+    model.clickSquare('e4')
+
+    await waitForCondition(
+      () => peek(storedGameRecordAtom(game.id))?.evaluations?.[0] === null,
+    )
+
+    expect(openAiProvider.callOpenAi).not.toHaveBeenCalled()
+
+    // Unlock vault → refreshArbiterOnVaultChange effect fires → arbiter rebuilt with real key
+    expect(await unlockVault(TEST_MASTER_PASSWORD)).toBeNull()
+    await flush(2)
+
+    // Move 2: real arbiter now active → provider is called
+    model.clickSquare('e7')
+    model.clickSquare('e5')
+    await flush(2)
+
+    expect(resolveEvaluation).not.toBeNull()
+    resolveEvaluation!({ score: 64, comment: 'Black mirrors the center.' })
+
+    await waitForCondition(
+      () => peek(storedGameRecordAtom(game.id))?.evaluations?.[1]?.score === 64,
+    )
+
+    expect(peek(storedGameRecordAtom(game.id))?.evaluations?.[1]?.score).toBe(64)
+  })
 })

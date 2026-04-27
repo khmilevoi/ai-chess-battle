@@ -1,0 +1,43 @@
+- generic [ref=e3]:
+  - link "Skip to main content" [ref=e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - status [ref=e6]
+    - alert [ref=e7]
+    - banner [ref=e8]:
+      - generic [ref=e9]:
+        - heading "AI Chess Battle" [level=1] [ref=e11]
+        - generic "Credential vault" [ref=e12]:
+          - generic [ref=e13]: setup needed
+          - button "Set up vault" [ref=e14] [cursor=pointer]:
+            - img [ref=e15]
+        - button "Switch to light theme" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+      - navigation "Primary" [ref=e21]:
+        - button "Setup" [ref=e22] [cursor=pointer]
+        - button "Games" [ref=e23] [cursor=pointer]
+    - main [ref=e24]:
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - paragraph [ref=e28]: Local archive
+            - heading "Saved games" [level=1] [ref=e29]
+            - paragraph [ref=e30]: Every local game is stored with config and move history. Open any record to replay it or continue from the last position when possible.
+          - button "New Match" [ref=e31] [cursor=pointer]
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - button "All" [pressed] [ref=e34] [cursor=pointer]
+            - button "In progress" [ref=e35] [cursor=pointer]
+            - button "Finished" [ref=e36] [cursor=pointer]
+          - generic [ref=e37]:
+            - generic [ref=e38]: Sort
+            - combobox "Sort" [ref=e39] [cursor=pointer]:
+              - option "Last updated" [selected]
+              - option "Created"
+              - option "Moves"
+              - option "Status"
+          - searchbox "Search games" [ref=e41]
+        - generic [ref=e42]:
+          - heading "No saved games yet" [level=2] [ref=e43]
+          - paragraph [ref=e44]: Start a match from setup to create the first local record.
+          - button "New Match" [ref=e45] [cursor=pointer]

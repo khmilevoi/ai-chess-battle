@@ -385,7 +385,12 @@ export const GamePage = reatomMemo(({
         </aside>
 
         <main className={styles.boardZone} aria-label="Chess board area">
-          <div className={styles.boardShell}>
+          <div
+            className={[
+              styles.boardShell,
+              arbiterInfoEntry ? styles.boardShellWithArbiter : '',
+            ].join(' ')}
+          >
             {arbiterInfoEntry ? (
               <EvalBar evaluation={resolvedEvaluation} />
             ) : null}
