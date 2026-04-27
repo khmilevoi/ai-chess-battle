@@ -39,8 +39,9 @@ describe('arbiter request helpers', () => {
   it('combines personality instructions with the locked JSON contract', () => {
     const instructions = buildArbiterInstructions(DEFAULT_ARBITER_PERSONALITY_KEY)
 
-    expect(instructions).toContain('witty chess arbiter')
-    expect(instructions).toContain('one compact sentence')
+    expect(instructions).toContain('classic chess arbiter')
+    expect(instructions).toContain('exactly one short sentence')
+    expect(instructions).toContain('Do not use markdown or long analysis.')
     expect(instructions).toContain('strict JSON')
     expect(instructions).toContain('"score"')
     expect(instructions).toContain('"comment"')

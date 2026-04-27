@@ -7,21 +7,26 @@ import {
 } from './personalities'
 
 describe('arbiter personalities', () => {
-  it('registers the default compact arbiter personality', () => {
+  it('registers the approved personality roster with classic as default', () => {
     expect(DEFAULT_ARBITER_PERSONALITY_KEY).toBe('classic')
-    expect(listArbiterPersonalities()).toEqual([
-      expect.objectContaining({
-        key: DEFAULT_ARBITER_PERSONALITY_KEY,
-        displayName: 'Classic Arbiter',
-      }),
+    expect(listArbiterPersonalities().map((personality) => personality.key)).toEqual([
+      'classic',
+      'toxic',
+      'stuffy',
+      'doomsday',
+      'deadpan-engine',
+      'hype-commentator',
+      'paranoid',
+      'medieval-court',
     ])
     expect(getArbiterPersonality(DEFAULT_ARBITER_PERSONALITY_KEY).instructions).toContain(
-      'witty chess arbiter',
+      'classic chess arbiter',
     )
   })
 
   it('recognizes only registered personality keys', () => {
     expect(isArbiterPersonalityKey(DEFAULT_ARBITER_PERSONALITY_KEY)).toBe(true)
+    expect(isArbiterPersonalityKey('toxic')).toBe(true)
     expect(isArbiterPersonalityKey('unknown')).toBe(false)
   })
 })
