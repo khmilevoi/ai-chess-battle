@@ -1,13 +1,8 @@
 .wrap {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-  gap: var(--space-2);
+  width: 44px;
+  min-width: 44px;
   height: 100%;
-  width: 22px;
-  min-width: 22px;
-  overflow: hidden;
+  min-height: 0;
 }
 
 .track {
@@ -44,31 +39,26 @@
   background: color-mix(in srgb, var(--bg-surface) 70%, transparent);
 }
 
-.centerLine {
+.scoreOverlay {
   position: absolute;
-  inset: calc(50% - 1px) 0 auto;
-  height: 2px;
-  background: color-mix(in srgb, var(--border-default) 72%, transparent);
-}
-
-.meta {
+  left: 0;
+  right: 0;
+  z-index: 2;
   display: grid;
-  justify-items: center;
-  gap: 4px;
-}
-
-.score {
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.caption {
+  place-items: center;
+  padding: 2px 3px;
+  border: 1px solid currentColor;
   font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 700;
-  text-transform: uppercase;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  pointer-events: none;
+  top: var(--score-top, auto);
+  bottom: var(--score-bottom, auto);
+  transform: var(--score-transform, none);
+  background: var(--score-bg, var(--bg-surface));
+  color: var(--score-color, var(--text-primary));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -81,26 +71,22 @@
   .wrap {
     width: 100%;
     min-width: 0;
-    height: auto;
-    grid-template-rows: auto;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-  }
-
-  .track {
-    min-height: 22px;
-    height: 22px;
+    height: 44px;
+    min-height: 44px;
   }
 
   .whiteFill {
-    inset: 0 auto 0 0;
+    inset: 0 0 0 auto;
     height: auto;
     width: var(--fill);
+    transition: width 160ms ease-out;
   }
 
-  .centerLine {
-    inset: 0 auto 0 calc(50% - 1px);
-    width: 2px;
-    height: auto;
+  .scoreOverlay {
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+    background: var(--bg-surface);
+    color: var(--text-primary);
   }
 }

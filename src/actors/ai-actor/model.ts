@@ -27,7 +27,6 @@ export const AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS = 10
 
 export type AiActorRequestArgs = {
   context: Parameters<AutonomousActor['requestMove']>[0]['context']
-  errorStack: ReadonlyArray<ActorRequestError>
   signal: AbortSignal
 }
 
@@ -157,7 +156,6 @@ export abstract class AiActor implements AutonomousActor {
         signal,
         result: await this.requestModelMove({
           context,
-          errorStack,
           signal,
         }),
       })

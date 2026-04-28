@@ -27,35 +27,24 @@ export const aiActorMoveSchema = z.object({
   promotion: z.enum(['q', 'r', 'b', 'n', 'null']),
 })
 
-export const AI_ACTOR_MOVE_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    from: { type: 'string' },
-    to: { type: 'string' },
-    promotion: {
-      type: 'string',
-      enum: ['q', 'r', 'b', 'n', 'null'],
-    },
-  },
-  required: ['from', 'to', 'promotion'],
-  additionalProperties: false,
-} as const
-
 export function buildAiActorInstructions() {
-  return [
-    'You are an assistant that selects chess moves.',
-    'Respond with JSON only.',
-    'Choose exactly one legal move for the side to move.',
-    'Never explain the move.',
-    'Always include promotion.',
-    'Use promotion="null" when the move is not a promotion.',
-  ].join(' ')
+  return `
+You are a chess move selector.
+
+Task:
+Choose the strongest legal move for the side to move.
+
+Rules:
+- Do not choose merely any legal move.
+- Before selecting a move, check whether the opponent can immediately capture the moved piece.
+- Never move a rook, queen, bishop, knight, or pawn to a square where the opponent king can capture it unless this wins by force.
+- Prefer moves that preserve material, give checkmate, win material, or improve the position.
+  `.trim();
 }
 
 export function buildAiActorPrompt({
   context,
-  errorStack,
-}: Pick<AiActorRequestArgs, 'context' | 'errorStack'>) {
+}: Pick<AiActorRequestArgs, 'context'>) {
   const lastMove = context.snapshot.lastMove?.uci ?? null
 
   return JSON.stringify({
@@ -64,11 +53,6 @@ export function buildAiActorPrompt({
     moveCount: context.moveCount,
     lastMove,
     legalMovesBySquare: context.legalMovesBySquare,
-    errorStack: errorStack.map((error, index) => ({
-      index: index + 1,
-      name: error.name,
-      message: error.message,
-    })),
   })
 }
 

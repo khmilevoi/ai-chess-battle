@@ -13,6 +13,7 @@ import {
   wrap,
 } from '@reatom/core'
 import { getRegisteredActor } from '@/actors/registry'
+import { getArbiterPersonality } from '@/arbiter/personalities'
 import { getRegisteredArbiter } from '@/arbiter/registry'
 import type {
   ActorModel,
@@ -84,6 +85,7 @@ type ArbiterInfoEntry = {
   displayName: string
   model: string
   modelLabel: string
+  personalityLabel: string
 }
 
 type RuntimeControlsByGroupKey = Record<string, unknown>
@@ -573,11 +575,16 @@ export function createGameModel({
         (option) => option.value === arbiterConfig.arbiterConfig.model,
       )?.label ?? arbiterConfig.arbiterConfig.model
 
+    const personalityLabel = getArbiterPersonality(
+      arbiterConfig.arbiterConfig.personalityKey,
+    ).displayName
+
     return {
       arbiterKey: arbiterConfig.arbiterKey,
       displayName: descriptor.displayName,
       model: arbiterConfig.arbiterConfig.model,
       modelLabel,
+      personalityLabel,
     } satisfies ArbiterInfoEntry
   }, `${name}.arbiterInfoEntry`)
   const resolvedEvaluation = computed<ResolvedEvaluation | null>(() => {

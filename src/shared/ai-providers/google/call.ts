@@ -8,7 +8,7 @@ import {
 } from './errors'
 
 const GOOGLE_THINKING_BUDGET = 128
-const GOOGLE_MAX_OUTPUT_TOKENS = 512
+const GOOGLE_MAX_OUTPUT_TOKENS = 5120
 
 type GoogleResponseDiagnostics = {
   finishReason?: string

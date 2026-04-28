@@ -45,7 +45,6 @@ export class AnthropicActorRuntime extends AiActor {
 
   protected async requestModelMove({
     context,
-    errorStack,
     signal,
   }: AiActorRequestArgs): Promise<ActorMove | Error> {
     const modelOption = getAnthropicModelOption(this.config.model)
@@ -54,7 +53,7 @@ export class AnthropicActorRuntime extends AiActor {
       apiKey: this.config.apiKey,
       model: this.config.model,
       system: buildAiActorInstructions(),
-      user: buildAiActorPrompt({ context, errorStack }),
+      user: buildAiActorPrompt({ context }),
       schema: aiActorMoveSchema,
       signal,
       providerOptions: {

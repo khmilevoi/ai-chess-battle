@@ -41,14 +41,13 @@ export class OpenAiActorRuntime extends AiActor {
 
   protected async requestModelMove({
     context,
-    errorStack,
     signal,
   }: AiActorRequestArgs): Promise<ActorMove | Error> {
     const parsed = await callOpenAi({
       apiKey: this.config.apiKey,
       model: this.config.model,
       system: buildAiActorInstructions(),
-      user: buildAiActorPrompt({ context, errorStack }),
+      user: buildAiActorPrompt({ context }),
       schema: aiActorMoveSchema,
       signal,
       providerOptions: {

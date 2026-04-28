@@ -289,7 +289,7 @@
 }
 
 .boardZone {
-  --board-eval-bar-width: 22px;
+  --board-eval-bar-width: 44px;
   --board-shell-gap: var(--space-3);
   --board-stack-gap: var(--space-2);
   --board-ticker-height: 48px;
@@ -596,7 +596,8 @@
     background-color 70ms ease;
 }
 
-.historyItemActive {
+.historyItemActive,
+.historyItemActive:hover:not(:disabled) {
   background: var(--bg-inverse);
   color: var(--text-inverse);
   box-shadow: none;

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import type { ActorContext, ActorMove } from '@/domain/chess/types'
+import {describe, expect, it} from 'vitest'
+import type {ActorContext, ActorMove} from '@/domain/chess/types'
 import {
   ActorError,
   IllegalMoveError,
@@ -9,7 +9,6 @@ import {
 import {
   AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS,
   AiActor,
-  type AiActorRequestArgs,
 } from './model'
 
 const context: ActorContext = {
@@ -18,7 +17,7 @@ const context: ActorContext = {
     fen: '8/8/8/8/8/8/8/8 w - - 0 1',
     turn: 'white',
     pieces: [],
-    status: { kind: 'active', turn: 'white' },
+    status: {kind: 'active', turn: 'white'},
     lastMove: null,
     history: [],
   },
@@ -39,7 +38,7 @@ async function flushMicrotask() {
 }
 
 class FakeAiActor extends AiActor {
-  readonly attempts: Array<{ errorStack: Array<string> }> = []
+  requestCount = 0
 
   private readonly results: Array<ActorMove | Error>
 
@@ -51,12 +50,8 @@ class FakeAiActor extends AiActor {
     this.results = [...results]
   }
 
-  protected async requestModelMove({
-    errorStack,
-  }: AiActorRequestArgs): Promise<ActorMove | Error> {
-    this.attempts.push({
-      errorStack: errorStack.map((error) => error.message),
-    })
+  protected async requestModelMove(): Promise<ActorMove | Error> {
+    this.requestCount += 1
 
     const result = this.results.shift()
 
@@ -94,7 +89,7 @@ describe('AiActor', () => {
 
     expect(settled).toBe(false)
     expect(actor.confirmationPending()).toEqual({
-      params: { side: 'white' },
+      params: {side: 'white'},
     })
 
     expect(actor.confirmMoveRequest()).toBeNull()
@@ -132,7 +127,7 @@ describe('AiActor', () => {
       signal: controller.signal,
     })
 
-    controller.abort(new TurnCancelledError({ side: 'white' }))
+    controller.abort(new TurnCancelledError({side: 'white'}))
 
     const result = await pendingConfirmation
 
@@ -140,7 +135,7 @@ describe('AiActor', () => {
     expect(actor.confirmationPending()).toBeNull()
   })
 
-  it('retries with the accumulated error stack for retryable errors', async () => {
+  it('retries retryable errors until a legal move is returned', async () => {
     const actor = new FakeAiActor([
       new IllegalMoveError({
         uci: 'e2e5',
@@ -154,10 +149,7 @@ describe('AiActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(actor.attempts).toEqual([
-      { errorStack: [] },
-      { errorStack: ['Illegal move e2e5'] },
-    ])
+    expect(actor.requestCount).toBe(2)
     expect(result).toEqual(legalMove)
   })
 
@@ -172,13 +164,13 @@ describe('AiActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(actor.attempts).toEqual([{ errorStack: [] }])
+    expect(actor.requestCount).toBe(1)
     expect(result).toBe(actorError)
   })
 
   it('stops retrying after the global attempt limit', async () => {
     const repeatedFailures = Array.from(
-      { length: AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS + 1 },
+      {length: AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS + 1},
       (_, index) =>
         new IllegalMoveError({
           uci: `invalid-${index + 1}`,
@@ -192,14 +184,7 @@ describe('AiActor', () => {
       signal: new AbortController().signal,
     })
 
-    expect(actor.attempts).toHaveLength(AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS)
-    expect(actor.attempts[0]).toEqual({ errorStack: [] })
-    expect(actor.attempts[1]).toEqual({
-      errorStack: ['Illegal move invalid-1'],
-    })
-    expect(actor.attempts[2]).toEqual({
-      errorStack: ['Illegal move invalid-1', 'Illegal move invalid-2'],
-    })
+    expect(actor.requestCount).toBe(AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS)
     expect(result).toBe(repeatedFailures[AI_ACTOR_REQUEST_MOVE_MAX_ATTEMPTS - 1])
   })
 })

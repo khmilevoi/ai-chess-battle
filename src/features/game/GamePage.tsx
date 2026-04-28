@@ -217,6 +217,10 @@ function renderMatchInfoPanel({
                   <dt>Model</dt>
                   <dd>{arbiterInfoEntry.modelLabel}</dd>
                 </div>
+                <div>
+                  <dt>Personality</dt>
+                  <dd>{arbiterInfoEntry.personalityLabel}</dd>
+                </div>
               </dl>
             </div>
           </section>

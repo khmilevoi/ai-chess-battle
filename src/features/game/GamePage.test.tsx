@@ -383,13 +383,14 @@ describe('GamePage', () => {
 
     render(<GamePage model={model} />)
 
-    expect(screen.getByLabelText('Evaluation bar')).not.toBeNull()
-    expect(screen.getByText('-0.2')).not.toBeNull()
+    const evalBar = screen.getByLabelText('Evaluation bar')
+    expect(evalBar).not.toBeNull()
+    expect(evalBar).toHaveTextContent('+0.2')
 
     model.goToMove(2)
 
     await waitFor(() => {
-      expect(screen.getByText('+0.5')).not.toBeNull()
+      expect(screen.getByLabelText('Evaluation bar')).toHaveTextContent('+0.5')
     })
 
     model.goToMove(0)

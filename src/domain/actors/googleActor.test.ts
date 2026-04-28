@@ -273,7 +273,7 @@ describe('GoogleActor', () => {
     expect(result).toBeInstanceOf(IllegalMoveError)
   })
 
-  it('passes the accumulated error stack in repeated sdk requests', async () => {
+  it('retries repeated sdk requests without serializing retry history', async () => {
     const actor = GoogleActor.create(config)
 
     if (!(actor instanceof GoogleActorRuntime)) {
@@ -299,36 +299,20 @@ describe('GoogleActor', () => {
     expect(result).not.toBeInstanceOf(Error)
     expect(generateContentMock).toHaveBeenCalledTimes(3)
 
-    const firstInput = JSON.parse(generateContentMock.mock.calls[0][0].contents as string) as {
-      errorStack: Array<{ index: number; name: string; message: string }>
-    }
-    const secondInput = JSON.parse(generateContentMock.mock.calls[1][0].contents as string) as {
-      errorStack: Array<{ index: number; name: string; message: string }>
-    }
-    const thirdInput = JSON.parse(generateContentMock.mock.calls[2][0].contents as string) as {
-      errorStack: Array<{ index: number; name: string; message: string }>
+    if (result instanceof Error) {
+      throw result
     }
 
-    expect(firstInput.errorStack).toEqual([])
-    expect(secondInput.errorStack).toEqual([
-      {
-        index: 1,
-        name: 'IllegalMoveError',
-        message: 'Illegal move e2e5',
-      },
-    ])
-    expect(thirdInput.errorStack).toEqual([
-      {
-        index: 1,
-        name: 'IllegalMoveError',
-        message: 'Illegal move e2e5',
-      },
-      {
-        index: 2,
-        name: 'IllegalMoveError',
-        message: 'Illegal move e2e5',
-      },
-    ])
+    expect(result.uci).toBe('e2e4')
+
+    const inputs = generateContentMock.mock.calls.map(
+      (call) => JSON.parse(call[0].contents as string) as Record<string, unknown>,
+    )
+
+    expect(inputs).toHaveLength(3)
+    for (const input of inputs) {
+      expect(input).not.toHaveProperty('errorStack')
+    }
   })
 
   it('returns http errors without retrying', async () => {
@@ -428,7 +412,7 @@ describe('GoogleActor', () => {
           thinkingConfig: {
             thinkingBudget: 128,
           },
-          maxOutputTokens: 512,
+          maxOutputTokens: 5120,
         }),
       }),
     )

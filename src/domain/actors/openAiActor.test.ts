@@ -278,7 +278,7 @@ describe('OpenAiActor', () => {
     expect(result).toBeInstanceOf(IllegalMoveError)
   })
 
-  it('passes the accumulated error stack in repeated provider requests', async () => {
+  it('retries repeated provider requests without serializing retry history', async () => {
     openAiProviderMock.callOpenAi
       .mockResolvedValueOnce(createIllegalMove())
       .mockResolvedValueOnce(createIllegalMove())
@@ -298,36 +298,20 @@ describe('OpenAiActor', () => {
     expect(result).not.toBeInstanceOf(Error)
     expect(openAiProviderMock.callOpenAi).toHaveBeenCalledTimes(3)
 
-    const firstInput = JSON.parse(openAiProviderMock.callOpenAi.mock.calls[0]![0].user) as {
-      errorStack: Array<{ index: number; name: string; message: string }>
-    }
-    const secondInput = JSON.parse(openAiProviderMock.callOpenAi.mock.calls[1]![0].user) as {
-      errorStack: Array<{ index: number; name: string; message: string }>
-    }
-    const thirdInput = JSON.parse(openAiProviderMock.callOpenAi.mock.calls[2]![0].user) as {
-      errorStack: Array<{ index: number; name: string; message: string }>
+    if (result instanceof Error) {
+      throw result
     }
 
-    expect(firstInput.errorStack).toEqual([])
-    expect(secondInput.errorStack).toEqual([
-      {
-        index: 1,
-        name: 'IllegalMoveError',
-        message: 'Illegal move e2e5',
-      },
-    ])
-    expect(thirdInput.errorStack).toEqual([
-      {
-        index: 1,
-        name: 'IllegalMoveError',
-        message: 'Illegal move e2e5',
-      },
-      {
-        index: 2,
-        name: 'IllegalMoveError',
-        message: 'Illegal move e2e5',
-      },
-    ])
+    expect(result.uci).toBe('e2e4')
+
+    const inputs = openAiProviderMock.callOpenAi.mock.calls.map(
+      (call) => JSON.parse(call[0].user) as Record<string, unknown>,
+    )
+
+    expect(inputs).toHaveLength(3)
+    for (const input of inputs) {
+      expect(input).not.toHaveProperty('errorStack')
+    }
   })
 
   it('returns http errors without retrying', async () => {
