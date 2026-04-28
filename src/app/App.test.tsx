@@ -103,6 +103,7 @@ async function expectLiveMatchLoaded(expectedMoves: Array<string> = []) {
 
 describe('App integration', () => {
   beforeEach(async () => {
+    urlAtom.init()
     clearStoredActorConfigMap()
     storedMatchConfig.clear()
     clearStoredGameArchive()
@@ -133,8 +134,15 @@ describe('App integration', () => {
       expect(screen.getByRole('button', { name: 'Start Match' })).toBeInTheDocument()
     })
     expect(screen.getByRole('heading', { name: 'AI Chess Battle' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Setup' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Games' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'AI Chess Battle' })).toHaveAttribute(
+      'href',
+      '/',
+    )
+    expect(screen.getByRole('link', { name: 'Setup' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Games' })).toHaveAttribute(
+      'href',
+      '/games',
+    )
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Set up vault' }))
@@ -277,16 +285,17 @@ describe('App integration', () => {
 
     await expectLiveMatchLoaded()
     expect(window.location.pathname).toMatch(/^\/game\/.+$/)
-    expect(screen.getByRole('button', { name: 'Active game' })).toBeInTheDocument()
+    const activeGameLink = screen.getByRole('link', { name: 'Active game' })
+    expect(activeGameLink).toHaveAttribute('href', window.location.pathname)
     expect(screen.queryByRole('button', { name: 'Back to setup' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Setup' }))
+    await user.click(screen.getByRole('link', { name: 'Setup' }))
 
     await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
     expect(screen.getByText('Resume your last game')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Resume Match' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Active game' }))
+    await user.click(screen.getByRole('link', { name: 'Active game' }))
 
     await expectLiveMatchLoaded()
   }, 15000)
@@ -304,8 +313,8 @@ describe('App integration', () => {
 
     render(<App />)
 
-    await screen.findByRole('button', { name: 'Games' }, { timeout: 5000 })
-    await user.click(screen.getByRole('button', { name: 'Games' }))
+    await screen.findByRole('link', { name: 'Games' }, { timeout: 5000 })
+    await user.click(screen.getByRole('link', { name: 'Games' }))
 
     await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
     const openGameButtons = await screen.findAllByRole(
@@ -335,7 +344,10 @@ describe('App integration', () => {
     await screen.findByText('Resume your last game', undefined, { timeout: 5000 })
     expect(screen.getByText('Resume your last game')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Resume Match' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Active game' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Active game' })).toHaveAttribute(
+      'href',
+      `/game/${game.id}`,
+    )
   })
 
   it('restores a saved session on cold /game/:gameId load', async () => {
@@ -506,14 +518,14 @@ describe('App integration', () => {
     await expectLiveMatchLoaded()
 
     for (let iteration = 0; iteration < 3; iteration += 1) {
-      await user.click(screen.getByRole('button', { name: 'Setup' }))
+      await user.click(screen.getByRole('link', { name: 'Setup' }))
       await screen.findByRole('button', { name: 'Start Match' }, { timeout: 5000 })
       expect(screen.getByText('Resume your last game')).toBeInTheDocument()
 
-      await user.click(screen.getByRole('button', { name: 'Active game' }))
+      await user.click(screen.getByRole('link', { name: 'Active game' }))
       await expectLiveMatchLoaded()
 
-      await user.click(screen.getByRole('button', { name: 'Games' }))
+      await user.click(screen.getByRole('link', { name: 'Games' }))
       await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
 
       const openGameButtons = await screen.findAllByRole(
@@ -551,7 +563,7 @@ describe('App integration', () => {
     for (let iteration = 0; iteration < 4; iteration += 1) {
       await expectLiveMatchLoaded(['e2e4', 'e7e5'])
 
-      await user.click(screen.getByRole('button', { name: 'Games' }))
+      await user.click(screen.getByRole('link', { name: 'Games' }))
       await screen.findByRole('heading', { name: 'Saved games' }, { timeout: 5000 })
 
       const openGameButtons = await screen.findAllByRole(

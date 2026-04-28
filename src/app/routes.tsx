@@ -22,20 +22,7 @@ import { RootShell } from './RootShell'
 
 export const rootRoute = reatomRoute({
   render({ outlet }) {
-    return (
-      <RootShell
-        outlet={outlet}
-        goToSetup={() => {
-          setupRoute.go(undefined, true)
-        }}
-        goToGames={() => {
-          gamesRoute.go(undefined, true)
-        }}
-        goToGame={(gameId) => {
-          gameRoute.go({ gameId }, true)
-        }}
-      />
-    )
+    return <RootShell>{outlet()}</RootShell>
   },
 }, 'routes.root')
 
