@@ -11,5 +11,9 @@
       "Bash(vercel login *)",
       "Bash(rtk ls *)"
     ]
+  },
+  "enabledPlugins": {
+    "vercel@claude-plugins-official": true,
+    "context7@claude-plugins-official": true
   }
 }
