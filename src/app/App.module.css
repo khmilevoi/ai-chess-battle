@@ -313,6 +313,7 @@
 
   .headerColumn {
     grid-template-columns: 1fr auto auto;
+    align-items: center;
   }
 
   .brand {
@@ -341,10 +342,17 @@
   }
 
   .headerColumn {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--space-2);
   }
 
-  .vaultLabel {
+  .name {
+    font-size: 1.25rem;
+    line-height: 1.05;
+  }
+
+  .vaultLabel,
+  .vaultNotice {
     display: none;
   }
 

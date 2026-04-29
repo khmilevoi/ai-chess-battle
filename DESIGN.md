@@ -400,13 +400,219 @@ Not exported from `shared/ui` — used inline as `<span>` in feature CSS modules
 
 Variants used today: `.sideBadgeWhite`, `.sideBadgeBlack`. The `.arbiterBadge` currently uses `--feedback-warning-bg` (yellow) and must be flattened to a black-fill inverted badge — see [Migration Notes](#11-migration-notes).
 
-### 5.10 Tabs / Filter Buttons
+### 5.10 Filter Button Group — [GamesPage.tsx](src/features/games/GamesPage.tsx)
 
-Not a component yet. Today's filter pattern (in [GamesPage.tsx](src/features/games/GamesPage.tsx)) is a row of `Button` instances with one carrying `aria-pressed="true"` and inverted styling. Codify as:
+Row of `Button` instances as a mutually-exclusive filter; one button pressed at a time.
 
-- `role="group"`, `aria-label="Filter games"`.
-- Each button: `aria-pressed={current === value}`.
-- Pressed button: `--bg-inverse` fill, `--text-inverse`, no shadow.
+| Property | Value |
+|---|---|
+| Wrapper `role` | `"group"` |
+| Wrapper `aria-label` | Describes axis: `"Filter games"` |
+| Each button | `aria-pressed={current === value}` |
+| Minimum width | `80px` per button |
+| Gap | `--space-2` between buttons |
+| Wrap | `flex-wrap: wrap` |
+| Pressed: fill | `--bg-inverse`, `--text-inverse` |
+| Pressed: shadow | none |
+| Pressed: hover | no transform, no shadow (held state, no lift) |
+| Bar border | `border-bottom: --brutalist-border` |
+| Bar padding | `--space-3 0` |
+
+Sort `<select>` and search input sit in the same bar row with `margin-left: auto` on the sort group.
+
+### 5.11 Toggle / Switch
+
+`<label>` wrapping `<input type="checkbox">` and a two-line text block; the full label area is the click target.
+
+| Property | Value |
+|---|---|
+| Card border | `2px solid currentColor` |
+| Card padding | `--space-2` |
+| Card layout | `grid; grid-template-columns: auto 1fr; gap: --space-2` |
+| Card background | `--bg-surface` |
+| Checkbox size | `22px × 22px` |
+| Checkbox border | `2px solid currentColor; appearance: none` |
+| Checked bg | `--bg-inverse` |
+| Checked shadow | `3px 3px 0 --bg-surface` |
+| Checkmark | `::after` L-shape `10px × 6px`, `border-left/bottom: 3px solid --text-inverse`, `rotate(-45deg) translate(1px, -1px)` |
+| Focus | `--focus-ring` on `<input>`, `outline-offset: 3px` |
+
+Title: `font-weight: 700; font-size: 0.84rem; line-height: 1.35`. Hint: `font-size: 0.78rem; font-weight: 600; color: --text-muted`.
+
+### 5.12 Search Input — [GamesPage.tsx](src/features/games/GamesPage.tsx)
+
+`<input type="search">` with `aria-label`; no `<label>` element. Wrapper `max-width: 320px; width: 100%`.
+
+| Property | Value |
+|---|---|
+| Type | `search` |
+| Padding | `8px 10px` |
+| Border | `--brutalist-border` |
+| Background | `--bg-surface` |
+| Font | body, `--font-size-base` |
+| Placeholder | `--text-muted` |
+| Focus | `--focus-ring`, `outline-offset: 2px` |
+| Native clear btn | styled via `::-webkit-search-cancel-button` where supported |
+
+Results update live (`onChange`); no submit, no autocomplete dropdown.
+
+### 5.13 Password Input — [CredentialVaultDialog.tsx](src/app/CredentialVaultDialog.tsx), [AiProviderSettings.tsx](src/shared/ai-providers/ui/AiProviderSettings.tsx)
+
+`<input type="password">` for credentials and API keys. Current code: plain field, no reveal button. Target pattern below.
+
+| Property | Value |
+|---|---|
+| Wrapper | `display: flex; align-items: stretch; border: --brutalist-border` |
+| Input | `border: none; padding: 10px 12px; flex: 1` |
+| Reveal button | `32px wide; border-left: --brutalist-border; no shadow` |
+| Reveal icon | `Eye` / `EyeOff` Lucide `size={14}`, `aria-hidden` |
+| Reveal `aria-label` | `"Show password"` / `"Hide password"` |
+| Toggle effect | `type` switches `password` ↔ `text` |
+| Disabled wrapper | `--bg-surface-strong`; reveal button hidden |
+
+Helper `<p>` with `INFO ·` prefix below; `aria-describedby` links input to helper.
+
+### 5.14 Game Card — [GamesPage.tsx](src/features/games/GamesPage.tsx)
+
+Archive list item. `<article>` element, in a `repeat(auto-fit, minmax(300px, 1fr))` grid.
+
+| Property | Value |
+|---|---|
+| Border | `--brutalist-border-strong` |
+| Shadow | `--shadow-default` |
+| Background | `--bg-surface` |
+| Padding | `--space-5` |
+| Gap | `--space-4` (rows within card) |
+| Header border-bottom | `--brutalist-border` |
+| Title | display serif, `1.7rem`, `font-weight: 700`, `line-height: 1` |
+| Status text | `1rem; font-weight: 700` |
+| Meta pills | `flex-wrap: wrap; gap: --space-2`; each `<span>`: `padding: 5px 9px; border: --brutalist-border; bg: --bg-surface-alt; font-mono; 0.76rem; uppercase` |
+| Timestamps | 2-column grid → 1 col at `640px`; `<dt>`: mono uppercase; `<dd>`: `font-weight: 600` |
+| Active badge | inverted; `32px` min-height; `padding: 6px 10px` |
+| Hover | `--shadow-hover` |
+
+Mobile (`max-width: 640px`): single-column grid; timestamp grid collapses to 1 column.
+
+### 5.15 Progress Bar
+
+4px-tall horizontal bar for AI-turn loading (§7.4 > 2s pattern). No border.
+
+| Property | Value |
+|---|---|
+| Height | `4px` |
+| Track background | `--bg-surface-strong` |
+| Fill background | `--bg-inverse` |
+| Border | none |
+| Border-radius | `0` |
+| Determinate animation | `transform: scaleX()` linear, driven by `--ai-expected-duration` |
+| Indeterminate | omit `aria-valuenow`; fill shuttles at constant speed |
+| ARIA | `role="progressbar"`, `aria-valuemin="0"`, `aria-valuemax="100"`, `aria-valuenow` (omit if indeterminate), `aria-label` |
+
+Sits at the bottom edge of the actor panel.
+
+### 5.16 Tooltip
+
+Hover/focus popup for supplementary info. Not yet implemented.
+
+| Property | Value |
+|---|---|
+| Background | `--bg-inverse` |
+| Color | `--text-inverse` |
+| Border | `2px solid --border-default` |
+| Padding | `--space-2` |
+| Font | mono, `--font-size-xs`, `font-weight: 700` |
+| Shadow | `--shadow-default` |
+| Default position | below trigger, `4px` gap |
+| Flip | above when clipping viewport bottom |
+| Delay | `0ms` |
+| Trigger events | `:hover` and `:focus-visible` on trigger element |
+
+ARIA: trigger carries `aria-describedby="{tooltipId}"`; tooltip has `role="tooltip"`. Keep tooltip in DOM (toggle visibility, not mount/unmount) so the id reference stays valid.
+
+### 5.17 Inline Banner
+
+Persistent in-page notice. Distinct from Toast (§5.5): not position-fixed, not auto-dismissed, not stacked.
+
+| Tone | Visual |
+|---|---|
+| Neutral | `--bg-surface` + radial dot background, `INFO ·` eyebrow |
+| Warning | `--bg-surface` + 45° diagonal stripes, `NOTE ·` eyebrow |
+| Error | `--bg-inverse` fill, `--text-inverse`, doubled 4px border, `ALERT ·` eyebrow |
+| Success | `--bg-inverse` fill, `--text-inverse`, `OK ·` eyebrow |
+
+| Property | Value |
+|---|---|
+| Width | `100%` of container |
+| Padding | `--space-4` |
+| Border | `--brutalist-border` |
+| Shadow | none |
+| Optional close | `Button` top-right, `X` icon, `aria-label="Dismiss"` |
+| ARIA | `role="status"` (neutral/warning/success), `role="alert"` (error) |
+
+### 5.18 Data Block
+
+Mono readout for FEN strings, PGN, JSON, or other structured text. Not yet implemented as a component.
+
+| Property | Value |
+|---|---|
+| Background | `--bg-surface-strong` |
+| Border | `2px solid --border-muted` |
+| Padding | `--space-3` |
+| Font | `--font-mono`, `--font-size-sm` |
+| White-space | `pre-wrap` |
+| Word-break | `break-all` |
+| Optional copy btn | §5.19 button, top-right, `position: absolute` |
+
+Wrapper: `position: relative` when copy button is present.
+
+### 5.19 Copy Button
+
+32px square icon-only button for clipboard copy. Used inline in §5.18 Data Block and other data surfaces.
+
+| Property | Value |
+|---|---|
+| Size | `32px × 32px` |
+| Border | `--brutalist-border` |
+| Shadow | none |
+| Background | `--bg-surface` |
+| Icon resting | `Copy` Lucide at `size={14}` |
+| Icon after copy | `Check` Lucide at `size={14}` for `1200ms`, then reverts |
+| `aria-label` | `"Copy {label}"` |
+| Announcement | `"Copied"` via `SrAnnouncer` on success |
+| Focus | `--focus-ring-style`, `outline-offset: 2px` |
+
+### 5.20 kbd
+
+Keyboard shortcut hint. Rendered as `<kbd>` element.
+
+| Property | Value |
+|---|---|
+| Border | `2px solid --border-default` |
+| Background | `--bg-surface` |
+| Padding | `--space-1` vertical, `4px` horizontal |
+| Min-width | `24px` |
+| Font | `--font-mono`, `--font-size-xs`, `font-weight: 700` |
+| Text-align | `center` |
+| Display | `inline-flex; align-items: center; justify-content: center` |
+
+Multi-key combos: join `<kbd>` elements with a literal ` + ` text node. No wrapper, no styling on the separator.
+
+### 5.21 Disclosure
+
+`<details>/<summary>` collapsible region. Not yet implemented.
+
+| Property | Value |
+|---|---|
+| `<summary>` layout | `flex; align-items: center; gap: --space-2; cursor: pointer; list-style: none` |
+| Chevron icon | `ChevronRight` Lucide `size={14}` |
+| Chevron open | `rotate(90deg)` via `details[open] summary .chevron`, transition `--motion-fast` |
+| Label | mono, uppercase, `font-weight: 700` |
+| Optional end badge | §5.9 badge, `margin-left: auto` |
+| Body padding | `--space-4; margin-top: --space-3` |
+| Body border-top | `--brutalist-border` |
+| Animation | none (instant open/close) |
+
+Remove native disclosure triangle: `list-style: none` on `<summary>` + `::-webkit-details-marker { display: none }`.
 
 ---
 
@@ -504,6 +710,26 @@ Top-of-left-rail card. Tones (`.neutralTone`, `.warningTone`, `.errorTone`, `.su
 | Success | `--bg-inverse` fill, `--text-inverse`, `OK ·` eyebrow, eyebrow text uses `--border-muted` for low-contrast subhead |
 
 (The current implementation uses an 8px-wide accent stripe at the left edge in `--feedback-*-bg`. Drop the accent stripe entirely; structure already encodes the tone.)
+
+### 6.7 Move History List — [GamePage.module.css](src/features/game/GamePage.module.css)
+
+Right-rail scrollable list of moves. Each row is a `<button>` navigating to that position in the game tree.
+
+| Property | Value |
+|---|---|
+| List layout | `display: grid; gap: --space-2; overflow-y: auto` |
+| Max-height ≥1180px | fills rail (`none`) |
+| Max-height 640–1180px | `480px` |
+| Row layout | `grid; grid-template-columns: auto 1fr` → `1fr` at `640px` |
+| Move number cell | `min-width: 34px; place-items: center; font-mono; 0.76rem; font-weight: 700; uppercase` |
+| Move primary label | `0.92rem; font-weight: 700; line-height: 1.3` |
+| Move secondary label | `font-mono; 0.76rem; font-weight: 600` (eval, annotation) |
+| Hover (non-active) | `--bg-surface-strong` |
+| Active row | `--bg-inverse`, `--text-inverse`, no shadow, no transform |
+| Press | `translateY(1px)` |
+| Transition | `background-color 70ms ease` |
+
+Scrollbar: 8px width, `--bg-surface-strong` track, `--color-gray-dark` thumb, via `::-webkit-scrollbar`.
 
 ---
 
